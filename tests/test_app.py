@@ -7,6 +7,7 @@ from unittest.mock import patch
 from PySide6.QtWidgets import QApplication, QMessageBox
 from buddy.window import MainWindow
 from buddy.session import read_reference
+from buddy.settings import Preferences
 
 class AppTests(unittest.TestCase):
     @classmethod
@@ -14,11 +15,14 @@ class AppTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        self.preferences_patch = patch("buddy.window.load_preferences", return_value=Preferences(sound=False))
+        self.preferences_patch.start()
         self.window = MainWindow()
 
     def tearDown(self):
         self.window.editor.document().setModified(False)
         self.window.close()
+        self.preferences_patch.stop()
 
     def test_start_keeps_reference_out_of_editor(self):
         self.assertFalse(self.window.start_button.isEnabled())
@@ -51,8 +55,8 @@ class AppTests(unittest.TestCase):
     def test_import_encodings_and_limit(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "test.c"
-            path.write_bytes("// Grüße".encode("cp1252"))
-            self.assertEqual(read_reference(str(path)), "// Grüße")
+            path.write_bytes("// euro €".encode("cp1252"))
+            self.assertEqual(read_reference(str(path)), "// euro €")
             path.write_bytes(b"\xef\xbb\xbfint main(void) {}")
             self.assertTrue(read_reference(str(path)).startswith("int"))
             path.write_bytes(b"x" * 1_000_001)

@@ -1,1 +1,1 @@
-"""AI Coding Buddy – lokale Desktop-Grundanwendung."""
+"""AI Coding Buddy: a small, independent programming tutor."""

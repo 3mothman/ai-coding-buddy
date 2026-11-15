@@ -1,9 +1,8 @@
 @echo off
 cd /d "%~dp0"
-if not exist ".venv\Scripts\python.exe" (
-  echo Bitte zuerst die Einrichtung in README.md ausfuehren.
+if not exist ".venv\Scripts\pythonw.exe" (
+  echo Run Setup.bat first.
   pause
   exit /b 1
 )
-".venv\Scripts\python.exe" main.py
-if errorlevel 1 pause
+start "" ".venv\Scripts\pythonw.exe" main.py
