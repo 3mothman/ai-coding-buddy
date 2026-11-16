@@ -7,7 +7,7 @@ from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QStackedWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPlainTextEdit, QPushButton, QFileDialog, QMessageBox, QCheckBox,
-    QLineEdit, QScrollArea, QDialog,
+    QLineEdit, QScrollArea, QDialog, QComboBox, QSlider,
 )
 from .character import BuddyCharacter
 from .editor import CodeEditor
@@ -203,6 +203,22 @@ class MainWindow(QMainWindow):
         right.addWidget(self.sound_box)
         self.speech_note = self.label("", "subtitle")
         right.addWidget(self.speech_note)
+        self.voice_choice = QComboBox()
+        self.voice_choice.setAccessibleName("English voice")
+        for voice in self.speech.voices():
+            self.voice_choice.addItem(voice.name(), voice)
+        self.voice_choice.currentIndexChanged.connect(self.choose_voice)
+        right.addWidget(self.label("Voice"))
+        right.addWidget(self.voice_choice)
+        self.speed = QSlider(Qt.Orientation.Horizontal)
+        self.speed.setRange(-50, 30)
+        self.speed.setValue(-10)
+        self.speed.setAccessibleName("Speech speed")
+        self.speed.valueChanged.connect(lambda value: self.speech.set_rate(value / 100))
+        self.speech.set_rate(-0.1)
+        right.addWidget(self.label("Speech speed: slower to faster"))
+        right.addWidget(self.speed)
+        self.button("Preview voice", lambda: self.speech.say("Let's build this program together, one step at a time."), right)
         self.review_label = self.label("", "subtitle")
         right.addWidget(self.review_label)
         right.addStretch()
@@ -283,7 +299,7 @@ class MainWindow(QMainWindow):
         self.hint_label.setText("Hint level 1 of 4")
         self.pages.setCurrentIndex(1)
         self.editor.setFocus()
-        self.show_message("Let's begin! What are the inputs and the expected output?", "neutral")
+        self.show_message("I'm reading your reference. We'll build this together, one concept at a time.", "neutral")
         self.ask("start")
 
     def code_changed(self):
@@ -414,6 +430,12 @@ class MainWindow(QMainWindow):
         self.preferences.sound = enabled
         self.speech.set_enabled(enabled)
         self.persist_preferences()
+
+    def choose_voice(self, index):
+        voice = self.voice_choice.itemData(index)
+        if voice is not None and self.speech.engine is not None:
+            self.speech.stop()
+            self.speech.engine.setVoice(voice)
 
     def speech_error(self, message):
         self.speech_note.setText(message)

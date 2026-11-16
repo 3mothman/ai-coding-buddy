@@ -34,6 +34,15 @@ class SpeechService(QObject):
         except (ImportError, RuntimeError):
             self.engine = None
 
+    def voices(self):
+        if self.engine is None:
+            return []
+        return [v for v in self.engine.availableVoices() if v.locale().language() == QLocale.Language.English]
+
+    def set_rate(self, rate):
+        if self.engine is not None:
+            self.engine.setRate(rate)
+
     @property
     def available(self):
         return self.engine is not None

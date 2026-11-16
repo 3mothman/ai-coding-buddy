@@ -175,3 +175,20 @@ Technical references: [Qt plain text editor](https://doc.qt.io/qtforpython-6/PyS
 [Qt speech](https://doc.qt.io/qtforpython-6/PySide6/QtTextToSpeech/QTextToSpeech.html),
 [Chat Completions API format](https://developers.openai.com/api/reference/typescript/resources/chat).
 See [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Teaching and connection update
+
+The buddy now explains the purpose of the next building block before asking you
+to write it. Groq requests explicitly ask for JSON and use low reasoning effort
+for GPT-OSS. AI settings include Groq/local-server presets and a sample-only
+connection test. No real Groq credentials were used during development.
+
+The learning panel offers installed English voice selection, preview and speed.
+Voice quality depends on installed voices. Function names and identifiers have
+distinct colours. Mismatched closing brackets receive red squiggles after a short
+pause; these checks are not full compiler diagnostics.
+
+A local server can be connected through http://localhost:11434/v1 using the exact
+installed model name. No model weights or local inference runtime are bundled.
+A narrow teaching task still requires a capable code model; hardware, model
+license, download size, and teaching accuracy must be evaluated before bundling.

@@ -1,19 +1,19 @@
 """C highlighting, line numbers, and indentation without code completion."""
 import re
 from PySide6.QtCore import Qt, QRect, QSize
-from PySide6.QtGui import QColor, QFontDatabase, QPainter, QSyntaxHighlighter, QTextCharFormat
-from PySide6.QtWidgets import QPlainTextEdit, QWidget
+from PySide6.QtGui import QColor, QFontDatabase, QPainter, QSyntaxHighlighter, QTextCharFormat, QTextCursor
+from PySide6.QtWidgets import QPlainTextEdit, QWidget, QTextEdit
 
 class CHighlighter(QSyntaxHighlighter):
     def __init__(self, document):
         super().__init__(document)
         self.formats = {}
-        for name, color in {"keyword": "#c5a1ff", "number": "#ffc978", "string": "#72e5ca", "comment": "#8498af", "preprocessor": "#83baff"}.items():
+        for name, color in {"keyword": "#c5a1ff", "number": "#ffc978", "string": "#72e5ca", "comment": "#8498af", "preprocessor": "#83baff", "function": "#e8d590", "variable": "#9cdcfe"}.items():
             fmt = QTextCharFormat()
             fmt.setForeground(QColor(color))
             self.formats[name] = fmt
         keywords = r"\b(?:auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|int|long|register|return|short|signed|sizeof|static|struct|switch|typedef|union|unsigned|void|volatile|while|_Bool|_Atomic|_Alignof|_Alignas|_Generic|_Static_assert|_Thread_local|restrict|inline)\b"
-        self.tokens = re.compile(r'(?P<string>"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|(?P<comment>//.*|/\*.*?\*/)|(?P<preprocessor>^\s*#.*)|(?P<keyword>' + keywords + r')|(?P<number>\b(?:0x[\da-fA-F]+|\d+(?:\.\d+)?)\b)')
+        self.tokens = re.compile(r'(?P<string>"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|(?P<comment>//.*|/\*.*?\*/)|(?P<preprocessor>^\s*#.*)|(?P<keyword>' + keywords + r')|(?P<function>\b[A-Za-z_]\w*(?=\s*\())|(?P<variable>\b[A-Za-z_]\w*\b)|(?P<number>\b(?:0x[\da-fA-F]+|\d+(?:\.\d+)?)\b)')
 
     def highlightBlock(self, text):
         self.setCurrentBlockState(0)
@@ -79,6 +79,42 @@ class CodeEditor(QPlainTextEdit):
         self.blockCountChanged.connect(self.update_margin)
         self.updateRequest.connect(self.update_gutter)
         self.update_margin()
+        from PySide6.QtCore import QTimer
+        self.diagnostic_timer = QTimer(self)
+        self.diagnostic_timer.setSingleShot(True)
+        self.diagnostic_timer.setInterval(900)
+        self.diagnostic_timer.timeout.connect(self.check_delimiters)
+        self.textChanged.connect(lambda: self.diagnostic_timer.start())
+
+    def check_delimiters(self):
+        from .analysis import stripped_code
+        # Keep offsets stable while ignoring strings and comments.
+        text = self.toPlainText()
+        pattern = r'//[^\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\''
+        clean = re.sub(pattern, lambda m: " " * len(m.group()), text)
+        stack, errors = [], []
+        for position, char in enumerate(clean):
+            if char in "({[":
+                stack.append((char, position))
+            elif char in ")}]":
+                if not stack or stack[-1][0] != {")": "(", "}": "{", "]": "["}[char]:
+                    errors.append(position)
+                else:
+                    stack.pop()
+        # Open blocks are normal while typing; underline only mismatched closers.
+        selections = []
+        for position in errors:
+            selection = QTextEdit.ExtraSelection()
+            cursor = QTextCursor(self.document())
+            cursor.setPosition(position)
+            cursor.movePosition(QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor)
+            selection.cursor = cursor
+            selection.format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
+            selection.format.setUnderlineColor(QColor("#ff7b86"))
+            selection.format.setToolTip("This closing bracket does not match the current opening bracket.")
+            selections.append(selection)
+        self.setExtraSelections(selections)
+        self.setToolTip(f"{len(errors)} mismatched closing bracket(s). Local checks cover delimiters only.")
 
     def gutter_width(self):
         return 16 + self.fontMetrics().horizontalAdvance("9") * len(str(max(1, self.blockCount())))

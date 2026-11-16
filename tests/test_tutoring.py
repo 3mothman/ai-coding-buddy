@@ -48,6 +48,15 @@ class AnalysisTests(unittest.TestCase):
         result = parse_feedback(json.dumps({"message": "Consider the stopping condition.", "snippet": "int secret = 42;"}), Snapshot("", "", ""))
         self.assertEqual(result.snippet, "")
 
+    def test_natural_explanation_allows_semicolon(self):
+        result = parse_feedback(json.dumps({"message": "This header declares output functions; add it before the entry point."}), Snapshot("", "", ""))
+        self.assertIn("header", result.message)
+
+    def test_reference_grounded_intro(self):
+        result = DemoTutor().analyze(Snapshot("Print a greeting", '#include <stdio.h>\nint main(void) { puts("Hi"); }', "", reason="start"))
+        self.assertIn("stdio.h", result.message)
+        self.assertIn("declares", result.message)
+
     def test_full_solution_rejected(self):
         for response in ({"message": "int main() { return 0; }"},
                          {"message": "Try this.", "snippet": "int main() { return 0; }"}):
@@ -61,7 +70,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertTrue(parse_feedback(response, Snapshot("", "", "int x;", reason="review")).complete)
 
     def test_invalid_schema_and_oversized_prose(self):
-        for value in ("[]", "not json", '{"message":42}', json.dumps({"message": "x" * 651})):
+        for value in ("[]", "not json", '{"message":42}', json.dumps({"message": "x" * 1801})):
             with self.assertRaises(TutorError):
                 parse_feedback(value, Snapshot("", "", ""))
 

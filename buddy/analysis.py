@@ -78,8 +78,15 @@ class DemoTutor:
         if snap.reason == "progress":
             return Feedback("You have added another building block. Try tracing what it does with a small example.", "happy", concepts=present, plan=plan)
         if not snap.code.strip():
-            messages = [
-                "What are the inputs and the expected output of this task?",
+            headers = re.findall(r"#\s*include\s*[<\"]([^>\"]+)", snap.reference)
+            uses_output = bool(re.search(r"\b(?:printf|puts|putchar)\s*\(", stripped_code(snap.reference)))
+            if "stdio.h" in headers and uses_output:
+                first = "Let's start building this program. The reference uses standard output, so our first building block is the stdio.h header: it declares functions such as printf that let a C program display a result. Add that header at the top of your file, then we can look at where the program starts."
+            elif headers:
+                first = "Let's start building this program. The reference includes " + ", ".join(headers) + ". Headers declare interfaces used by the program. Identify the function that needs each header before adding it, then we can create the program's entry point."
+            else:
+                first = "Let's start building this program. This reference does not require an included header. Begin by identifying where execution starts and what information the program needs to work with. We will build one concept at a time."
+            messages = [first,
                 "Split the task into input, processing, and output before writing.",
                 "Describe the processing step in plain English, then choose a place to start.",
                 "Pick a tiny example and work out the expected result by hand.",
@@ -114,10 +121,20 @@ Privately derive a flexible conceptual learning plan from the task and reference
 Accept alternative algorithms and valid different implementations; never grade by text similarity
 or enforce the reference's statement order. Inspect syntax, logic, bounds, and edge cases.
 Compare recent_code snapshots to recognize recurring mistakes without treating unfinished code as wrong.
-Hints: level 1 a question; 2 a small clue; 3 explain the concept; 4 a concrete reasoning prompt.
+Teaching style: explain before asking. Be a patient human tutor, not a quiz generator.
+For reason=start, read the actual reference and task, welcome the learner, explain the goal,
+then introduce the first useful building block and WHY it is needed. For example, if the
+reference uses stdio.h for printf, explain that this header declares input/output functions.
+Do not invent libraries or steps absent from the exercise. Do not dump the full plan at once.
+For help/idle/progress, acknowledge the actual current code, explain one next concept and
+its purpose in 2-5 natural sentences, then suggest one small action. Do not merely ask
+what happens next. Avoid repetitive generic advice about tracing inputs.
+Levels: 1 plain-language explanation and next action; 2 a concrete clue tied to this task;
+3 a more detailed explanation with a tiny conceptual example; 4 precise reasoning support.
+If a valid alternative approach is emerging, follow it instead of forcing the reference.
 Only reason=example permits a short isolated unrelated example in snippet (max 6 lines).
 Never show the full solution, main function, or reference code. No code in any other field.
-Use 1-3 short sentences in message, encouraging humor without ridicule.
+Use 2-5 natural sentences in message, encouraging humor without ridicule.
 Ask at most one short understanding question, only when reason=question.
 For reason=answer respond to the learner's answer to question, explaining misconceptions briefly.
 For reason=review evaluate the complete logic including alternative solutions and edge cases.
@@ -162,7 +179,7 @@ def parse_feedback(content, snap):
             if not isinstance(value, list) or len(value) > 8 or any(not isinstance(x, str) or len(x) > 100 for x in value):
                 raise ValueError()
             return value
-        message = string("message", 650)
+        message = string("message", 1800)
         if not message:
             raise ValueError()
         state = string("state", 20) or "explaining"
@@ -172,7 +189,7 @@ def parse_feedback(content, snap):
         summary = string("summary", 700) if snap.reason == "review" else ""
         plan, found = items("plan"), items("concepts")
         prose = "\n".join([message, question, summary, *plan, *found])
-        if re.search(r"\x60{3}|#\s*include|\bmain\s*\(|[{};]", prose):
+        if re.search(r"\x60{3}|#\s*include|\bmain\s*\(|[{}]", prose):
             raise ValueError()
         normalized_reference = re.sub(r"\s+", "", snap.reference)
         if len(normalized_reference) > 16 and normalized_reference in re.sub(r"\s+", "", prose):
@@ -204,6 +221,10 @@ class ChatCompletionsTutor:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(asdict(snap), ensure_ascii=False)}
         ], "stream": False}
+        if urlsplit(self.endpoint).hostname == "api.groq.com":
+            payload["response_format"] = {"type": "json_object"}
+            if self.model.startswith("openai/gpt-oss"):
+                payload["reasoning_effort"] = "low"
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
@@ -219,6 +240,8 @@ class ChatCompletionsTutor:
         except HTTPError as error:
             error.close()
             messages = {401: "Authentication failed. Check the API key.",
+                        404: "Model or endpoint not found. Check the exact model ID and base URL.",
+                        400: "The provider rejected the request. Check model compatibility and available context size.",
                         403: "The provider denied access. Check your model permissions.",
                         429: "Provider rate limit or quota reached. Wait or check your account."}
             raise TutorError(messages.get(error.code, f"Provider request failed (HTTP {error.code}). Check the base URL and model.")) from None
