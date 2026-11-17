@@ -178,13 +178,21 @@ class GeminiAnalysisTests(unittest.TestCase):
         self.assertIn("largest", sent["code"])
         self.assertTrue(sent["conversation"])
 
+    def test_array_correction_preserved_when_model_adds_unsolicited_snippet(self):
+        value = result("highlight_error", "Nach numbers fehlen die eckigen Klammern [].")
+        value["analysis"].update(severity="syntax", line_start=1, line_end=1)
+        value["intervention"]["snippet"] = "int numbers[] = {1,2,3,4,5};"
+        validated = validate_result(value, Snapshot("Find largest", "ref", "int numbers = {1,2,3,4,5};", reason="check", reference_analysis=REFERENCE))
+        self.assertIn("[]", validated.intervention.message)
+        self.assertEqual(validated.intervention.snippet, "")
+        self.assertEqual(validated.analysis.line_start, 1)
+
     def test_invalid_actions_ids_ranges_and_unrequested_code_are_rejected(self):
         snap = Snapshot("", "reference", "int a;", reference_analysis=REFERENCE)
         for modify in (
             lambda r: r["intervention"].update(action="overwrite_editor"),
             lambda r: r["student_progress"].update(completed=["invented"]),
             lambda r: r["analysis"].update(line_start=1, line_end=20),
-            lambda r: r["intervention"].update(snippet="int answer=42;"),
             lambda r: r["intervention"].update(message="int main(void) { return 0; }"),
         ):
             data = result()

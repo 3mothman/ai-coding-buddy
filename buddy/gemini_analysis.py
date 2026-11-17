@@ -225,6 +225,10 @@ def validate_result(value, snap):
             intervention.should_speak = False
         elif not intervention.message.strip() and not (intervention.action == "mark_step_completed" and not intervention.should_speak):
             raise ValueError("missing message")
+        # Optional examples must not invalidate an otherwise useful diagnosis.
+        # Discard unsolicited code before disclosure checks; never display it.
+        if snap.reason != "example":
+            intervention.snippet = ""
         if contains_program(intervention.message) or contains_program(intervention.snippet):
             raise ValueError("solution disclosure")
         if intervention.snippet and (snap.reason != "example" or len(intervention.snippet.splitlines()) > 6):
