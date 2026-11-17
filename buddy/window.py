@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.1")
+        self.setWindowTitle("AI Coding Buddy - v0.8.2")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)

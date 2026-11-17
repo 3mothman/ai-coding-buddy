@@ -18,11 +18,42 @@ from PySide6.QtWidgets import QApplication
 
 from buddy.analysis import Feedback, Snapshot, TutorError
 from buddy.audio_io import PCMResampler, PlaybackBuffer, DuplexAudio
-from buddy.gemini_analysis import GeminiTutor, validate_result, AnalysisResult, DEFAULT_FLASH, decode_response
+from buddy.gemini_analysis import GeminiTutor, validate_result, AnalysisResult, DEFAULT_FLASH, decode_response, safe_api_error
 from buddy.live_voice import LiveVoice, TranscriptAccumulator, live_config
 from buddy.orchestration import AssistancePolicy, LearningOrchestrator
 from buddy.settings import Preferences, SettingsDialog
 from buddy.window import MainWindow
+
+class ApiFailureTests(unittest.TestCase):
+    def test_google_invalid_key_is_http_400(self):
+        from google.genai.errors import ClientError
+        error = ClientError(400, {"error": {"code": 400, "status": "INVALID_ARGUMENT",
+            "message": "private-key-and-code", "details": [{"reason": "API_KEY_INVALID"}]}})
+        message = safe_api_error(error)
+        self.assertIn("invalid-key", message)
+        self.assertNotIn("private-key-and-code", message)
+
+    def test_restricted_key_is_distinct(self):
+        error = SimpleNamespace(code=403, details={"error": {"details": [{"reason": "SERVICE_DISABLED"}]}})
+        self.assertIn("restricted-key", safe_api_error(error))
+
+    def test_invalid_request_does_not_blame_key(self):
+        message = safe_api_error(SimpleNamespace(code=400, details={}))
+        self.assertIn("invalid-request", message)
+        self.assertNotIn("invalid-key", message)
+
+    def test_transport_timeout_and_server_errors(self):
+        import httpx2
+        self.assertIn("network-timeout", safe_api_error(httpx2.ReadTimeout("secret")))
+        self.assertIn("network-transport", safe_api_error(httpx2.ConnectError("secret")))
+        self.assertIn("HTTP 503", safe_api_error(SimpleNamespace(code=503)))
+
+    def test_unknown_failures_never_echo_exception(self):
+        message = safe_api_error(RuntimeError("secret-api-key"))
+        self.assertIn("sdk-failure", message)
+        self.assertNotIn("secret", message)
+        self.assertIn("sdk-failure", safe_api_error(SimpleNamespace(details={"error": {"details": None}})))
+
 
 REFERENCE = {
     "assignment_summary": "Find the greatest integer in an array.",

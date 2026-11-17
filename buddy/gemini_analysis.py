@@ -98,13 +98,43 @@ are provisional, not compiler validation. No main implementation or reference di
 def safe_api_error(error, operation="Gemini analysis"):
     """Return categories, never response text (it may contain code or credentials)."""
     code = getattr(error, "code", None) or getattr(error, "status_code", None)
+    # Google's key errors can be HTTP 400, not just 401/403. Inspect only
+    # structured ErrorInfo reasons and emit our own fixed text.
+    details = getattr(error, "details", None)
+    body = details.get("error", details) if isinstance(details, dict) else {}
+    entries = body.get("details", []) if isinstance(body, dict) else []
+    reasons = {item.get("reason") for item in entries
+               if isinstance(item, dict) and isinstance(item.get("reason"), str)} if isinstance(entries, list) else set()
+    if reasons & {"API_KEY_INVALID", "API_KEY_EXPIRED", "API_KEY_NOT_FOUND"}:
+        return f"{operation}: Google rejected the API key (HTTP {code if isinstance(code, int) else 400}; invalid-key). Copy an active Google AI Studio key into AI settings."
+    if reasons & {"API_KEY_SERVICE_BLOCKED", "API_KEY_HTTP_REFERRER_BLOCKED", "API_KEY_IP_ADDRESS_BLOCKED", "SERVICE_DISABLED"}:
+        return f"{operation}: the key or project blocks this API (restricted-key). Check the key restrictions and enable the Generative Language API in its Google project."
     if code in (401, 403):
-        return f"{operation}: access denied. Check your Google AI Studio key, project and model access."
+        return f"{operation}: access denied (HTTP {code}). Check your Google AI Studio key, project and model access."
+    if code == 400:
+        return f"{operation}: Google rejected the request (HTTP 400; invalid-request). This can be an unsupported model setting or response schema. It does not by itself mean the API key is wrong."
     if code == 404:
-        return f"{operation}: model unavailable. Choose an available model ID in AI settings."
+        return f"{operation}: model unavailable (HTTP 404). Choose an available model ID in AI settings."
     if code == 429:
-        return f"{operation}: rate limit or quota reached. Wait and check your Google account limits."
-    return f"{operation} could not finish. Check the connection and selected model, then retry."
+        return f"{operation}: rate limit or quota reached (HTTP 429). Wait and check your Google account limits."
+    if isinstance(code, int) and 500 <= code <= 599:
+        return f"{operation}: Google service error (HTTP {code}). Please retry shortly."
+    import importlib
+    timeout_types = [TimeoutError]
+    transport_types = [ConnectionError]
+    for module_name in ("httpx", "httpx2"):
+        try:
+            transport = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        timeout_types.append(transport.TimeoutException)
+        transport_types.append(transport.TransportError)
+    if isinstance(error, tuple(timeout_types)):
+        return f"{operation}: the request timed out (network-timeout). Check your connection and retry."
+    if isinstance(error, tuple(transport_types)):
+        return f"{operation}: could not connect securely to Google (network-transport). Check your connection, proxy or firewall."
+    # Never echo str(error), arbitrary exception names or server-supplied status.
+    return f"{operation}: unexpected SDK failure (sdk-failure). Please report this category and the app version."
 
 
 class ResponseReadError(TutorError):
