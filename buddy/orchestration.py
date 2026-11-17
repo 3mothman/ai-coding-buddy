@@ -104,8 +104,8 @@ class LearningOrchestrator(QObject):
         self.policy.last_voice_activity = self.clock()
 
     def request(self, provider, snap):
-        if snap.answer:
-            self.memory.remember("user", snap.answer)
+        if snap.answer or snap.voice_question:
+            self.memory.remember("user", snap.answer or snap.voice_question)
         snap = replace(snap, reference_analysis=self.memory.reference,
                        completed_objectives=tuple(self.memory.completed),
                        current_objective=self.memory.objective,

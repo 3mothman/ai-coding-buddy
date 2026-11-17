@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.5")
+        self.setWindowTitle("AI Coding Buddy - v0.8.6")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -232,7 +232,12 @@ class MainWindow(QMainWindow):
         self.check_button = self.button("Check my code", lambda: self.ask("check"), right)
         self.check_button.setObjectName("primary")
         self.check_button.setToolTip("Check your current work and get one small next step.")
-        self.button("Ask me a question", lambda: self.ask("question"), right)
+        self.question_input = QLineEdit()
+        self.question_input.setPlaceholderText("Ask about your code...")
+        self.question_input.setMaxLength(2000)
+        self.question_input.returnPressed.connect(self.ask_direct_question)
+        right.addWidget(self.question_input)
+        self.button("Send question", self.ask_direct_question, right)
         self.answer = QLineEdit()
         self.answer.setPlaceholderText("Your answer to the buddy's question")
         self.answer.setMaxLength(2000)
@@ -499,6 +504,12 @@ class MainWindow(QMainWindow):
         if self.current_question and self.answer.text().strip():
             self.ask("answer")
 
+    def ask_direct_question(self):
+        question = self.question_input.text().strip()
+        if question:
+            self.voice_tool_question = question
+            self.ask("voice_question")
+
     def ask(self, reason):
         if self.pages.currentIndex() != 1:
             return
@@ -563,7 +574,7 @@ class MainWindow(QMainWindow):
         objectives = (self.controller.memory.reference or {}).get("objectives", [])
         title = next((step["title"] for step in objectives if step["id"] == current), feedback.lesson_title)
         self.objective_label.setText(title or "Work on your current step.")
-        self.last_checked_code = self.requested_code
+        self.last_checked_code = self.controller.snapshot.code if self.controller.snapshot else self.requested_code
         self.plan = feedback.plan or self.plan
         self.history.append(feedback.message)
         self.history = self.history[-12:]

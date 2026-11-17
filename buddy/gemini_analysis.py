@@ -80,6 +80,10 @@ For later calls return reference=null and use reference_analysis, completed obje
 current objective, changed lines and cursor. Re-evaluate completion against CURRENT code;
 if a previously correct part is deleted or broken, remove its completed ID.
 Completed IDs and current objective must come from the initial reference plan.
+On check, assess CURRENT student code, mark evidenced objectives complete, and select
+an unfinished objective. Explain that next step in the same reply. Never restart the
+lesson. Do not mark the current objective completed and then keep asking for it.
+For a direct voice_question, answer it without inventing new objective IDs.
 For voice_question, answer that direct question in the context of the current code.
 Be a calm friendly tutor in the requested language (English or German). 1-3 natural spoken
 sentences are usually enough. For a typo: one short correction. For a new concept:
@@ -235,8 +239,15 @@ def validate_result(value, snap):
             intervention.message = "I'm not sure which part you mean yet. Could you name the variable or line you are asking about?"
             intervention.should_speak = True
         return result
-    except (ValidationError, ValueError, KeyError, TypeError):
-        raise AnalysisValidationError("Gemini returned an invalid analysis action. No editor changes were applied. Please retry.") from None
+    except (ValidationError, ValueError, KeyError, TypeError) as error:
+        if isinstance(error, ValidationError):
+            category = "schema"
+        elif isinstance(error, ValueError):
+            category = str(error) if str(error) in {"reference required", "invalid initial progress", "unknown completed objective", "unknown objective", "invalid range", "range outside student code", "missing range", "missing message", "solution disclosure", "unrequested example", "reference disclosure"} else "validation"
+        else:
+            category = "structure"
+        log.warning("Gemini analysis validation rejected: %s", category)
+        raise AnalysisValidationError(f"Gemini returned an invalid analysis action ({category}). Your lesson progress is preserved. Please check your code again.") from None
 
 
 class GeminiTutor:

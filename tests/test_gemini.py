@@ -126,6 +126,15 @@ class GeminiAnalysisTests(unittest.TestCase):
             self.assertEqual(generate.call_count, 2)
             self.assertIn("response_correction", json.loads(generate.call_args.kwargs["contents"]))
 
+    def test_completed_header_moves_to_next_objective(self):
+        reference = deepcopy(REFERENCE)
+        reference["objectives"].insert(0, {"id": "header", "title": "Include header", "evidence": "stdio header present"})
+        FakeClient.response = result("explain_concept", "Now let's store the numbers in an array.")
+        FakeClient.response["student_progress"] = {"completed": ["header"], "current_objective": "array"}
+        feedback = self.tutor().analyze(Snapshot("Find largest", "ref", "#include <stdio.h>", reason="check", reference_analysis=reference, current_objective="header"))
+        self.assertEqual(feedback.structured["student_progress"]["current_objective"], "array")
+        self.assertEqual(feedback.structured["student_progress"]["completed"], ["header"])
+
     def test_initial_reference_is_structured_and_uses_official_contract(self):
         snap = Snapshot("Find greatest", "reference", "", reason="prepare")
         feedback = self.tutor().analyze(snap)

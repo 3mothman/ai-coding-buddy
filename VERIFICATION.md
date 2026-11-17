@@ -1,10 +1,10 @@
-# Verification — v0.8.5
+# Verification — v0.8.6
 
 Date: 17 November 2026. Platform: Windows, Python 3.11.
 
 | Check | Result |
 | --- | --- |
-| Automated suite | 91 tests passed in the final source suite |
+| Automated suite | 92 tests passed in the final source suite |
 | Official SDK configuration/schema validation | Passed, google-genai 3.4.0 |
 | Offline runtime script | Passed; live analysis explicitly marked not run |
 | 44.1/48 kHz capture conversion to 16 kHz | Passed synthetic streaming signal tests |
@@ -33,8 +33,10 @@ The root cause of the screenshot remains unconfirmed without its finish reason.
 
 HTTP error diagnostics were tested with real SDK error objects and a deliberate invalid diagnostic key (no successful inference or paid call). The user's actual connection failure remains unconfirmed until its diagnostic category is available.
 
-Version 0.8.5: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
+Version 0.8.6: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
 
-Version 0.8.5 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
+Version 0.8.6 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
 
-Version 0.8.5 automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.
+Version 0.8.6 automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.
+
+Version 0.8.6 adds contextual direct questions, remembers student questions, uses the accepted snapshot for code comparison, and reports safe validation rejection categories. Prompt instructions explicitly require checking current code and advancing to an unfinished objective. Offline contract tests do not establish real-model teaching accuracy or audible speech playback.
