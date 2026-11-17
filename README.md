@@ -221,3 +221,18 @@ A narrow local check catches unfinished array initializers such as int numbers[]
 without declaring them correct or advancing to loops. Other checks remain AI
 assessments, not compiler validation. Model behavior has not been evaluated with
 your live credentials; existing response-format and network fixes are retained.
+
+## Guided concept lessons (v0.6)
+
+The earlier 55-word rule is replaced by a lesson: meaning, purpose, notation,
+and one action to try. A friendly homework introduction is requested at startup.
+Structured lessons keep their paragraphs and are not cut off by the old word cap.
+After a completed step the tutor teaches one next concept, instead of repeating
+it or issuing a bare command. Header-only work is explicitly contextualized so
+the tutor introduces the entry point before asking for arrays and counts.
+
+Technical wording distinguishes headers and functions from C language constructs:
+stdio.h declares functions such as printf; for and while are built into C.
+Lessons may explain small inline syntax without revealing the complete solution.
+These changes are tested with local fixtures. Live model teaching quality still
+needs user evaluation; the app does not claim compiler-verified correctness.

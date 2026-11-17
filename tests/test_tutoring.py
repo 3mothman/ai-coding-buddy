@@ -29,14 +29,29 @@ class AnalysisTests(unittest.TestCase):
             self.assertIn("Line 3", result.message)
             self.assertIn("not finished", result.message)
             self.assertNotIn("loop", result.message)
-            self.assertLessEqual(len(result.message.split()), 55)
+            self.assertLessEqual(len(result.message.split()), 160)
             self.assertFalse(result.complete)
 
     def test_short_messages_end_at_a_sentence(self):
         text = "Check this line first. " + "Next consider the condition. " * 30
         result = short_message(text)
-        self.assertLessEqual(len(result.split()), 55)
+        self.assertLessEqual(len(result.split()), 160)
         self.assertTrue(result.endswith("."))
+
+    def test_structured_lesson_preserves_teaching_parts(self):
+        data = {"message": "", "lesson_title": "A group of numbers", "explanation": "An array is like a row of boxes with one name.", "why": "We need it to keep the numbers we want to compare together.", "notation": "Square brackets [] mark the array, and curly braces hold starting values separated by commas.", "try_next": "Try naming your group and adding its starting values."}
+        result = parse_feedback(json.dumps(data), Snapshot("Find largest", "", "", reason="start"))
+        for name in ("explanation", "why", "notation", "try_next"):
+            self.assertIn(data[name], result.message)
+        self.assertEqual(result.lesson_title, data["lesson_title"])
+        self.assertEqual(result.message.count("\n\n"), 3)
+
+    def test_header_only_moves_to_explained_entry_point(self):
+        result = DemoTutor().analyze(Snapshot("Find largest", "", "#include<stdio.h>", reason="check"))
+        self.assertIn("starting point", result.message)
+        self.assertIn("function is", result.message)
+        self.assertIn("Round brackets", result.message)
+        self.assertNotIn("Add an array", result.message)
 
     def test_strings_and_comments_are_not_code(self):
         self.assertEqual(concepts('// for (int i=0;) {}\n"while ([)"'), [])
@@ -98,7 +113,7 @@ class AnalysisTests(unittest.TestCase):
         self.assertTrue(parse_feedback(response, Snapshot("", "", "int x;", reason="review")).complete)
 
     def test_invalid_schema_and_oversized_prose(self):
-        for value in ("[]", "not json", '{"message":42}', json.dumps({"message": "x" * 1801})):
+        for value in ("[]", "not json", '{"message":42}', json.dumps({"message": "x" * 2401})):
             with self.assertRaises(TutorError):
                 parse_feedback(value, Snapshot("", "", ""))
 

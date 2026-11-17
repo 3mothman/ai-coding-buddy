@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.5")
+        self.setWindowTitle("AI Coding Buddy - v0.6")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -166,6 +166,8 @@ class MainWindow(QMainWindow):
         right.addWidget(self.character)
         self.mode_label = self.label("", "subtitle")
         right.addWidget(self.mode_label)
+        self.lesson_heading = self.label("Let's learn together", "subtitle")
+        right.addWidget(self.lesson_heading)
         self.bubble = self.label("Ready when you are.", "bubble")
         right.addWidget(self.bubble)
         self.snippet = CodeEditor()
@@ -391,11 +393,12 @@ class MainWindow(QMainWindow):
             tuple(self.recent_code),
             self.editor.textCursor().blockNumber() + 1,
             self.last_checked_code, tuple(changes),
-            "Inspect the current unfinished line first. Do not repeat completed headers. One small action only.",
+            "Teach the current concept: meaning, purpose, symbols, then one action. After a correct step teach the next one. Do not repeat completed headers.",
         )
         self.controller.request(self.provider, snap)
 
     def receive_feedback(self, feedback):
+        self.lesson_heading.setText(feedback.lesson_title or "Your current step")
         self.last_checked_code = self.requested_code
         self.plan = feedback.plan or self.plan
         self.history.append(feedback.message)
