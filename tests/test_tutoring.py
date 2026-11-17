@@ -52,6 +52,18 @@ class AnalysisTests(unittest.TestCase):
         result = parse_feedback(json.dumps({"message": "This header declares output functions; add it before the entry point."}), Snapshot("", "", ""))
         self.assertIn("header", result.message)
 
+    def test_c_explanations_are_allowed(self):
+        text = "Start with #include <stdio.h>: it declares printf(). Then main() is the entry point; braces { and } mark its body."
+        result = parse_feedback(json.dumps({"message": text, "state": "friendly", "summary": None, "plan": None}), Snapshot("", "", "", reason="start"))
+        self.assertEqual(result.message, text)
+        self.assertEqual(result.state, "explaining")
+
+    def test_errors_have_diagnostic_categories(self):
+        for content, category in [("not json", "invalid-json"), ("[]", "expected-object"), ("{}", "missing-message"), (None, "empty-content")]:
+            with self.assertRaises(TutorError) as failure:
+                parse_feedback(content, Snapshot("", "", ""))
+            self.assertIn(category, str(failure.exception))
+
     def test_reference_grounded_intro(self):
         result = DemoTutor().analyze(Snapshot("Print a greeting", '#include <stdio.h>\nint main(void) { puts("Hi"); }', "", reason="start"))
         self.assertIn("stdio.h", result.message)
@@ -138,6 +150,17 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(context["code"], "student")
         self.assertEqual(context["level"], 3)
         self.assertIn("alternative", payload["messages"][0]["content"])
+
+    def test_http_provider_c_explanation_reaches_tutor(self):
+        type(self).response = {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps({"message": "We will use #include <stdio.h> for printf(). Next comes main(), the starting point.", "plan": ["headers", "main()"], "snippet": None})}}]}
+        result = ChatCompletionsTutor(self.endpoint, "test").analyze(Snapshot("", "", "", reason="start"))
+        self.assertIn("stdio.h", result.message)
+
+    def test_truncated_response_has_specific_error(self):
+        type(self).response = {"choices": [{"finish_reason": "length", "message": {"content": "partial"}}]}
+        with self.assertRaises(TutorError) as failure:
+            ChatCompletionsTutor(self.endpoint, "test").analyze(Snapshot("", "", ""))
+        self.assertIn("truncated", str(failure.exception))
 
     def test_error_does_not_leak_response_or_key(self):
         type(self).status = 401

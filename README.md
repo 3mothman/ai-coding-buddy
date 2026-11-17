@@ -200,3 +200,10 @@ probe reproduced HTTP 403 / gateway code 1010 with Python-urllib and reached
 Groq authentication (HTTP 401) with the application identifier. Real account
 authentication still requires your key. Known organization/project model
 permission errors are distinguished without exposing raw response bodies.
+
+## Response handling fix (0.4)
+
+Explanations may now name main(), #include, and braces. Full main implementations
+and reference disclosures remain blocked. Optional null fields are accepted, unknown
+expressions fall back to explaining, and parser failures include safe diagnostic
+categories without displaying raw provider text. Truncated responses are identified.

@@ -133,7 +133,7 @@ Levels: 1 plain-language explanation and next action; 2 a concrete clue tied to 
 3 a more detailed explanation with a tiny conceptual example; 4 precise reasoning support.
 If a valid alternative approach is emerging, follow it instead of forcing the reference.
 Only reason=example permits a short isolated unrelated example in snippet (max 6 lines).
-Never show the full solution, main function, or reference code. No code in any other field.
+Never show the full solution or a main function implementation. In prose you MAY name main(), printf(), #include <stdio.h>, and explain braces. Short inline syntax is welcome when it explains a concept. Executable multi-line code belongs only in an explicitly requested snippet.
 Use 2-5 natural sentences in message, encouraging humor without ridicule.
 Ask at most one short understanding question, only when reason=question.
 For reason=answer respond to the learner's answer to question, explaining misconceptions briefly.
@@ -161,39 +161,51 @@ class NoRedirects(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
+def contains_program(text):
+    # Function/header names in explanations are normal. Reject implementations,
+    # fenced code, or a complete reference instead of banning individual tokens.
+    return bool(re.search(r"\x60{3}|\bmain\s*\([^)]*\)\s*\{", text))
+
 def parse_feedback(content, snap):
     try:
+        if not isinstance(content, str) or not content.strip():
+            raise TutorError("AI returned no tutoring text (response: empty-content). Retry the connection test.")
         text = content.strip()
         if text.startswith(chr(96) * 3):
             text = re.sub(r"^\x60{3}(?:json)?\s*|\s*\x60{3}$", "", text)
-        data = json.loads(text)
+        try:
+            data = json.loads(text)
+        except ValueError:
+            raise TutorError("AI replied, but its tutoring text was not valid JSON (response: invalid-json). Retry the connection test.") from None
         if not isinstance(data, dict):
-            raise ValueError()
+            raise TutorError("AI replied with the wrong JSON structure (response: expected-object).")
         def string(name, limit):
             value = data.get(name, "")
+            if value is None and name != "message":
+                return ""
             if not isinstance(value, str) or len(value) > limit:
-                raise ValueError()
+                raise TutorError(f"AI response field '{name}' had the wrong type or length (response: invalid-field).")
             return value.strip()
         def items(name):
-            value = data.get(name, [])
+            value = data.get(name) or []
             if not isinstance(value, list) or len(value) > 8 or any(not isinstance(x, str) or len(x) > 100 for x in value):
-                raise ValueError()
+                raise TutorError(f"AI response field '{name}' must be a short list of concept names (response: invalid-field).")
             return value
         message = string("message", 1800)
         if not message:
-            raise ValueError()
+            raise TutorError("AI omitted the teaching message (response: missing-message).")
         state = string("state", 20) or "explaining"
         if state not in STATES:
-            raise ValueError()
+            state = "explaining"
         question = string("question", 240) if snap.reason == "question" else ""
         summary = string("summary", 700) if snap.reason == "review" else ""
         plan, found = items("plan"), items("concepts")
         prose = "\n".join([message, question, summary, *plan, *found])
-        if re.search(r"\x60{3}|#\s*include|\bmain\s*\(|[{}]", prose):
-            raise ValueError()
+        if contains_program(prose):
+            raise TutorError("AI tried to show a program instead of explaining it (response: solution-in-prose). Ask for a smaller hint.")
         normalized_reference = re.sub(r"\s+", "", snap.reference)
         if len(normalized_reference) > 16 and normalized_reference in re.sub(r"\s+", "", prose):
-            raise ValueError()
+            raise TutorError("AI repeated the reference solution (response: reference-disclosure). Ask for a smaller hint.")
         snippet = string("snippet", 450) if snap.reason == "example" else ""
         if len(snippet.splitlines()) > 6 or re.search(r"\bmain\s*\(|#\s*include", snippet):
             raise ValueError()
@@ -202,7 +214,7 @@ def parse_feedback(content, snap):
         return Feedback(message, state, question, snippet, plan, found,
                         data.get("complete") is True and snap.reason == "review" and bool(snap.code.strip()), summary)
     except (ValueError, TypeError, AttributeError):
-        raise TutorError("The provider returned an unusable tutoring response. Try again or choose another model.") from None
+        raise TutorError("AI returned an invalid example or response field (response: invalid-example). Ask for a smaller hint.") from None
 
 class ChatCompletionsTutor:
     """Providers implementing POST /chat/completions; no SDK dependency."""
@@ -226,7 +238,7 @@ class ChatCompletionsTutor:
             if self.model.startswith("openai/gpt-oss"):
                 payload["reasoning_effort"] = "low"
         headers = {"Content-Type": "application/json", "Accept": "application/json",
-                   "User-Agent": "AI-Coding-Buddy/0.3 (+https://github.com/3mothman/ai-coding-buddy)"}
+                   "User-Agent": "AI-Coding-Buddy/0.4 (+https://github.com/3mothman/ai-coding-buddy)"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
         request = Request(self.endpoint + "/chat/completions",
@@ -237,7 +249,12 @@ class ChatCompletionsTutor:
             if len(body) > 256000:
                 raise TutorError("The provider response was too large. Try a more concise model.")
             data = json.loads(body)
-            return parse_feedback(data["choices"][0]["message"]["content"], snap)
+            choice = data["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise TutorError("AI response was cut off by the provider (response: truncated). Retry with a shorter exercise.")
+            if choice.get("finish_reason") == "content_filter":
+                raise TutorError("The provider filtered this exercise (response: filtered).")
+            return parse_feedback(choice["message"]["content"], snap)
         except HTTPError as error:
             # Inspect only known error codes; never display arbitrary provider bodies,
             # which may echo API keys or exercise content.
