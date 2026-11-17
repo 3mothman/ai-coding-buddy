@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.8")
+        self.setWindowTitle("AI Coding Buddy - v0.8.9")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -196,7 +196,7 @@ class MainWindow(QMainWindow):
         self.talk_button.setEnabled(False)
         self.talk_button.pressed.connect(self.begin_talking)
         self.talk_button.released.connect(self.end_talking)
-        left.addWidget(self.label("Voice starts with your lesson. Hold this button while speaking.", "subtitle"))
+        self.talk_button.hide()
         content.addWidget(left_panel)
         content.addWidget(self.editor, 3)
         scroll = QScrollArea()
@@ -248,22 +248,22 @@ class MainWindow(QMainWindow):
         right.addWidget(self.answer)
         self.answer_button = self.button("Submit answer", self.submit_answer, right)
         self.answer_button.hide()
-        self.button("Review my solution", lambda: self.ask("review"), right)
         self.auto_box = QCheckBox("Automatic hints")
         self.auto_box.setChecked(False)
         self.preferences.automatic = False
         self.auto_box.toggled.connect(self.toggle_automatic)
-        right.addWidget(self.auto_box)
+        self.auto_box.hide()
         self.sound_box = QCheckBox("Sound")
         self.sound_box.setChecked(self.preferences.sound and self.speech.available)
         self.sound_box.setEnabled(self.speech.available)
         self.sound_box.toggled.connect(self.toggle_sound)
         self.live_button = self.button("Start Live voice", self.toggle_live, right)
+        self.live_button.hide()
         self.mute_button = self.button("Mute microphone", self.toggle_microphone, right)
         self.mute_button.setCheckable(True)
         self.mute_button.hide()
         self.live_status = self.label("Live voice requires Gemini and audio consent in AI settings.", "subtitle")
-        right.addWidget(self.live_status)
+        self.live_status.hide()
         self.transcript_view = QPlainTextEdit()
         self.transcript_view.setReadOnly(True)
         self.transcript_view.setAccessibleName("Live conversation transcript")
@@ -304,14 +304,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, "live_button"):
             gemini = isinstance(self.provider, GeminiTutor)
             self.live_button.setEnabled(gemini and self.voice_consent)
-            self.voice_choice.setEnabled(not gemini)
-            self.speed.setEnabled(not gemini)
-            self.preview_button.setEnabled(not gemini)
+            self.voice_choice.setEnabled(self.speech.available)
+            self.speed.setEnabled(self.speech.available)
+            self.preview_button.setEnabled(self.speech.available)
             self.repeat_button.setEnabled(self.speech.available or self.voice.is_connected)
             self.sound_box.setEnabled(True if gemini else self.speech.available)
-            if gemini:
-                self.speech.stop()
-                self.speech_note.setText("Gemini Live voice is connected." if self.voice.is_connected else "Start Live voice to hear the tutor. Text hints remain visible while audio is prepared.")
+            self.speech_note.setText("Read aloud uses the selected Windows voice. Microphone input is off.")
 
     def persist_preferences(self):
         try:
@@ -434,7 +432,6 @@ class MainWindow(QMainWindow):
             self.voice.respond_tool(self.voice_tool_id, "The code changed. Ask again about the current version.", self.controller.revision, stale=True)
             self.voice_tool_id = None
         self.update_live_context()
-        self.speech.stop()
         self.snippet.hide()
         self.review_label.clear()
         self.current_question = ""
@@ -630,8 +627,8 @@ class MainWindow(QMainWindow):
         self.bubble.setText(message)
         self.character.set_state(state)
         self.last_message_time = time.monotonic()
-        if not isinstance(self.provider, GeminiTutor):
-            self.speech.say(message)
+        self.speech.set_enabled(self.sound_box.isChecked())
+        self.speech.say(message)
 
     def toggle_automatic(self, enabled):
         self.preferences.automatic = enabled
@@ -645,7 +642,7 @@ class MainWindow(QMainWindow):
 
     def toggle_sound(self, enabled):
         self.preferences.sound = enabled
-        self.speech.set_enabled(enabled and not isinstance(self.provider, GeminiTutor))
+        self.speech.set_enabled(enabled)
         if not enabled and self.voice.running:
             self.stop_live()
         self.persist_preferences()
@@ -671,9 +668,8 @@ class MainWindow(QMainWindow):
         }, self.controller.revision)
 
     def start_lesson_voice(self):
-        if (isinstance(self.provider, GeminiTutor) and self.voice_consent
-                and self.sound_box.isChecked() and not self.voice.running):
-            self.toggle_live()
+        # Read-aloud is handled by show_message; no microphone session needed.
+        pass
 
     def toggle_live(self):
         if self.voice.running:
@@ -770,10 +766,8 @@ class MainWindow(QMainWindow):
         # explanation remains visible even when playback is partial or interrupted.
 
     def repeat_message(self):
-        if self.voice.is_connected:
-            self.voice.teach(self.history[-1] if self.history else self.bubble.text(), self.controller.revision)
-        elif not isinstance(self.provider, GeminiTutor):
-            self.speech.repeat()
+        self.speech.set_enabled(self.sound_box.isChecked())
+        self.speech.say(self.history[-1] if self.history else self.bubble.text())
 
     def choose_voice(self, index):
         voice = self.voice_choice.itemData(index)

@@ -31,7 +31,7 @@ class LessonVoiceTests(unittest.TestCase):
             window = SimpleNamespace(provider=GeminiTutor(api_key="test"), voice_consent=consent,
                 sound_box=SimpleNamespace(isChecked=lambda: sound), voice=SimpleNamespace(running=running), toggle_live=Mock())
             MainWindow.start_lesson_voice(window)
-            self.assertEqual(window.toggle_live.call_count, expected)
+            self.assertEqual(window.toggle_live.call_count, 0)
 
 
 class ApiFailureTests(unittest.TestCase):

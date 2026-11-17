@@ -37,7 +37,7 @@ class SpeechService(QObject):
     def voices(self):
         if self.engine is None:
             return []
-        return [v for v in self.engine.availableVoices() if v.locale().language() == QLocale.Language.English]
+        return list(self.engine.availableVoices())
 
     def set_rate(self, rate):
         if self.engine is not None:
