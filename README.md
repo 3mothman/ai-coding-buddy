@@ -236,3 +236,13 @@ stdio.h declares functions such as printf; for and while are built into C.
 Lessons may explain small inline syntax without revealing the complete solution.
 These changes are tested with local fixtures. Live model teaching quality still
 needs user evaluation; the app does not claim compiler-verified correctness.
+
+## Adaptive feedback (v0.7)
+
+A small typo gets a short correction, not the full lesson template. The known
+#incloud typo is caught locally on Check my code, including repeated checks.
+Help can still explain the concept. AI responses can choose correction mode;
+then the four lesson fields are not appended. New concepts keep the explained
+lesson format. Harmless Markdown code fences and empty main skeletons are
+accepted, while nonempty main implementations and full reference echoes remain
+blocked. No live account credentials were used in these regression tests.

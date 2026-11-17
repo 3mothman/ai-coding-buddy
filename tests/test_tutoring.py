@@ -53,6 +53,35 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn("Round brackets", result.message)
         self.assertNotIn("Add an array", result.message)
 
+    def test_incloud_typo_is_brief_and_local(self):
+        for tutor in (DemoTutor(), ChatCompletionsTutor("http://localhost:1/v1", "test")):
+            for _ in range(2):
+                result = tutor.analyze(Snapshot("Find largest", "", "#incloud<stdio.h>", reason="check"))
+                self.assertIn("#incloud", result.message)
+                self.assertIn("#include", result.message)
+                self.assertLessEqual(len(result.message.split()), 20)
+                self.assertNotIn("toolbox", result.message)
+
+    def test_typo_detector_ignores_comments_and_valid_include(self):
+        from buddy.analysis import typo_feedback
+        for code in ('#include<stdio.h>', '/* #incloud<stdio.h> */', '// #incloud<stdio.h>'):
+            self.assertIsNone(typo_feedback(Snapshot("", "", code, reason="check")))
+
+    def test_correction_mode_does_not_append_a_lesson(self):
+        result = parse_feedback(json.dumps({"mode": "correction", "message": "Line 1: use #include, not #incloud.", "explanation": "Long lesson", "why": "Long lesson", "notation": "Long lesson", "try_next": "Long lesson"}), Snapshot("", "", "", reason="check"))
+        self.assertNotIn("Long lesson", result.message)
+        self.assertLessEqual(len(result.message.split()), 35)
+
+    def test_fenced_header_is_not_a_program(self):
+        fence = chr(96) * 3
+        result = parse_feedback(json.dumps({"message": "Use this header:\n" + fence + "c\n#include <stdio.h>\n" + fence}), Snapshot("", "", ""))
+        self.assertIn("#include", result.message)
+        self.assertNotIn(fence, result.message)
+
+    def test_empty_main_skeleton_is_not_solution(self):
+        result = parse_feedback(json.dumps({"message": "The empty starting place looks like int main(void) { }. Put your work inside the braces."}), Snapshot("", "", ""))
+        self.assertIn("main", result.message)
+
     def test_strings_and_comments_are_not_code(self):
         self.assertEqual(concepts('// for (int i=0;) {}\n"while ([)"'), [])
         self.assertEqual(issue_signature('puts("}"); /* [ */'), "")

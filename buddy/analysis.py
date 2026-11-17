@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import json
 import re
 import socket
+from difflib import get_close_matches
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
@@ -73,6 +74,9 @@ def issue_signature(code):
 class DemoTutor:
     """Heuristics only: never declares a solution correct or enforces reference order."""
     def analyze(self, snap):
+        typo = typo_feedback(snap)
+        if typo:
+            return typo
         if snap.reason not in {"review", "question", "answer", "example"}:
             local = unfinished_array_feedback(snap)
             if local:
@@ -142,6 +146,13 @@ Accept alternative algorithms and valid different implementations; never grade b
 or enforce the reference's statement order. Inspect syntax, logic, bounds, and edge cases.
 Compare recent_code snapshots to recognize recurring mistakes without treating unfinished code as wrong.
 Teaching style: a friendly, relaxed teacher beside a complete beginner.
+Choose the response size based on the issue, not a fixed lesson length.
+TYPO / SMALL SYNTAX FIX: for a misspelling, missing symbol, or wrong bracket, use
+mode=correction and message of 1-2 short sentences, at most 35 words. Say which line,
+what was written, and the correction. Leave explanation/why/notation/try_next empty.
+Example: "Line 1: you wrote #incloud. It should be #include." STOP there.
+Do not restart the concept lesson for a typo. Help may explain it if the learner asks.
+NEW CONCEPT: use mode=lesson and the four teaching parts below.
 SIMPLE does not mean a bare command. Teach the meaning, purpose, and notation before asking
 for a small action. Use everyday words and a few short paragraphs, about 70-130 words total.
 Do not issue unexplained commands like "Add an array declaration and count".
@@ -177,7 +188,7 @@ For reason=review evaluate the complete logic including alternative solutions an
 complete=true only on explicit review with a nonempty substantively correct solution;
 this is a provisional AI assessment, not proof or compiler validation.
 Return ONLY a JSON object with:
-message:string (fallback plain explanation), lesson_title:string (short current-step heading),
+mode:correction|lesson, message:string (short correction or fallback explanation), lesson_title:string (short current-step heading),
 explanation:string (meaning in everyday words), why:string (why THIS homework needs it),
 notation:string (explain symbols with a small inline example), try_next:string (one small action),
 state:neutral|thinking|happy|surprised|explaining,
@@ -203,7 +214,8 @@ class NoRedirects(HTTPRedirectHandler):
 def contains_program(text):
     # Function/header names in explanations are normal. Reject implementations,
     # fenced code, or a complete reference instead of banning individual tokens.
-    return bool(re.search(r"\x60{3}|\bmain\s*\([^)]*\)\s*\{", text))
+    # Formatting alone is not a program. Empty main skeletons are teaching syntax.
+    return bool(re.search(r"\bmain\s*\([^)]*\)\s*\{\s*(?!\})\S", text))
 
 def short_message(message, word_limit=160):
     if len(message.split()) <= word_limit:
@@ -230,6 +242,22 @@ def lesson_context(code, previous=""):
             return "Only header directives are present. Do not ask for an array/count/loop yet. Explain main as the starting place next; header syntax needs no repeat unless it is wrong."
         return "Headers and other partial work exist, but no main was found. Inspect that partial work first. Explain placement without calling valid global declarations illegal."
     return "Inspect changed lines and cursor. Stay on unfinished work; after a correct small step, teach just the next concept with meaning, purpose, and symbols."
+
+
+def typo_feedback(snap):
+    if snap.reason not in {"check", "idle", "progress"}:
+        return None
+    code = re.sub(r"/\*[\s\S]*?\*/|//[^\n]*", lambda m: "\n" * m.group().count("\n"), snap.code)
+    for number, line in enumerate(code.splitlines(), 1):
+        match = re.match(r'^\s*#\s*(incl\w*)\s*[<"]', line)
+        if match and match.group(1) != "include" and get_close_matches(match.group(1), ["include"], cutoff=0.7):
+            return Feedback(f"Line {number}: you wrote #{match.group(1)}. It should be #include.", "thinking", lesson_title="Small spelling fix")
+    return None
+
+
+def clean_formatting(text):
+    # QLabel uses plain text. Remove Markdown fence wrappers, preserve their content.
+    return re.sub(r"\x60{3}(?:c|C|cpp|text)?[ \t]*\n?|\x60{3}", "", text).strip()
 
 
 def unfinished_array_feedback(snap):
@@ -273,14 +301,19 @@ def parse_feedback(content, snap):
         message = string("message", 2400)
         lesson_title = string("lesson_title", 100)
         parts = [string(name, 900) for name in ("explanation", "why", "notation", "try_next")]
-        if all(parts):
+        correction = data.get("mode") == "correction"
+        if all(parts) and not correction:
             message = "\n\n".join(parts)
+        message = clean_formatting(message)
+        if correction:
+            message = short_message(message, 35)
+            lesson_title = "Small correction"
         if not message:
             raise TutorError("AI omitted the teaching message (response: missing-message).")
         state = string("state", 20) or "explaining"
         if state not in STATES:
             state = "explaining"
-        question = string("question", 240) if snap.reason == "question" else ""
+        question = string("question", 240) if snap.reason == "question" and not correction else ""
         summary = string("summary", 700) if snap.reason == "review" else ""
         plan, found = items("plan"), items("concepts")
         prose = "\n".join([message, question, summary, *plan, *found])
@@ -294,7 +327,7 @@ def parse_feedback(content, snap):
             raise ValueError()
         if normalized_reference and snippet and normalized_reference in re.sub(r"\s+", "", snippet):
             raise ValueError()
-        return Feedback(message if all(parts) else short_message(message), state, question, snippet, plan, found,
+        return Feedback(message if all(parts) and not correction else short_message(message), state, question, snippet, plan, found,
                         data.get("complete") is True and snap.reason == "review" and bool(snap.code.strip()), summary, lesson_title)
     except (ValueError, TypeError, AttributeError):
         raise TutorError("AI returned an invalid example or response field (response: invalid-example). Ask for a smaller hint.") from None
@@ -309,6 +342,9 @@ class ChatCompletionsTutor:
         self.api_key = api_key.strip()
 
     def analyze(self, snap):
+        typo = typo_feedback(snap)
+        if typo:
+            return typo
         from dataclasses import asdict
         if snap.reason not in {"review", "question", "answer", "example"}:
             local = unfinished_array_feedback(snap)
@@ -327,7 +363,7 @@ class ChatCompletionsTutor:
             if self.model.startswith("openai/gpt-oss"):
                 payload["reasoning_effort"] = "low"
         headers = {"Content-Type": "application/json", "Accept": "application/json",
-                   "User-Agent": "AI-Coding-Buddy/0.6 (+https://github.com/3mothman/ai-coding-buddy)"}
+                   "User-Agent": "AI-Coding-Buddy/0.7 (+https://github.com/3mothman/ai-coding-buddy)"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
         request = Request(self.endpoint + "/chat/completions",
