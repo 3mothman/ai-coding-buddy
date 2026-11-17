@@ -3,6 +3,7 @@ from dataclasses import asdict
 import json
 import logging
 import os
+import re
 import time
 from typing import Literal
 
@@ -106,6 +107,53 @@ def safe_api_error(error, operation="Gemini analysis"):
     return f"{operation} could not finish. Check the connection and selected model, then retry."
 
 
+class ResponseReadError(TutorError):
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+def decode_response(response):
+    """Read SDK output without conflating an empty/truncated response with bad JSON."""
+    candidates = getattr(response, "candidates", None) or []
+    candidate = candidates[0] if candidates else None
+    reason = getattr(candidate, "finish_reason", None)
+    reason = getattr(reason, "value", reason)
+    reason = str(reason).split(".")[-1] if reason else "UNSPECIFIED"
+    prompt = getattr(response, "prompt_feedback", None)
+    blocked = getattr(prompt, "block_reason", None)
+    if blocked and str(getattr(blocked, "value", blocked)) not in {"BLOCKED_REASON_UNSPECIFIED", "BLOCK_REASON_UNSPECIFIED", "0"}:
+        raise ResponseReadError("Google blocked the sample prompt (response: prompt-blocked). Check your account's content policies.")
+    if reason in {"MAX_TOKENS", "CONTINUATION"}:
+        raise ResponseReadError("Gemini stopped before completing its JSON reply (response: truncated). A larger output budget was requested; try a shorter exercise if this persists.", retryable=True)
+    if reason in {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE", "PUP_LIMITED_DISABLED"}:
+        raise ResponseReadError(f"Google did not return a tutoring answer (response: filtered; finish: {reason}).")
+    parsed = getattr(response, "parsed", None)
+    if isinstance(parsed, BaseModel) and type(parsed) is not BaseModel:
+        return parsed.model_dump()
+    if isinstance(parsed, dict):
+        return parsed
+    try:
+        text = getattr(response, "text", None)
+    except (ValueError, TypeError):
+        text = None
+    if not text and candidate:
+        parts = getattr(getattr(candidate, "content", None), "parts", None) or []
+        text = "".join(part.text for part in parts if getattr(part, "text", None) and not getattr(part, "thought", False))
+    if not isinstance(text, str) or not text.strip():
+        raise ResponseReadError("Gemini returned no answer text (response: empty-output). The app retries once; if it persists, test another available Flash model.", retryable=True)
+    text = text.strip().lstrip("\ufeff")
+    if text.startswith(chr(96) * 3):
+        text = re.sub(r"^\x60{3}(?:json)?\s*|\s*\x60{3}$", "", text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ResponseReadError(f"Gemini returned text that was not valid JSON (response: invalid-json; position: {error.pos}). No code or key is shown in this diagnostic.") from None
+    if not isinstance(data, dict):
+        raise ResponseReadError("Gemini returned the wrong JSON structure (response: expected-object).")
+    return data
+
+
 def validate_result(value, snap):
     try:
         result = AnalysisResult.model_validate(value)
@@ -173,14 +221,17 @@ class GeminiTutor:
         # Each worker owns and closes its SDK client. Two bounded attempts for transient failures.
         for attempt in range(2):
             try:
+                config = {"system_instruction": ANALYSIS_INSTRUCTION,
+                          "response_mime_type": "application/json",
+                          "response_json_schema": AnalysisResult.model_json_schema(),
+                          "max_output_tokens": 8192 if attempt == 0 else 16384}
+                if self.model.startswith("gemini-3"):
+                    config["thinking_config"] = {"thinking_level": "LOW"}
                 with factory(api_key=self.api_key, http_options={"timeout": 25000, "retry_options": {"attempts": 1}}) as client:
                     response = client.models.generate_content(
                         model=self.model, contents=json.dumps(context, ensure_ascii=False),
-                        config={"system_instruction": ANALYSIS_INSTRUCTION,
-                                "response_mime_type": "application/json",
-                                "response_json_schema": AnalysisResult.model_json_schema(),
-                                "max_output_tokens": 5000})
-                    data = json.loads(response.text or "")
+                        config=config)
+                    data = decode_response(response)
                 result = validate_result(data, snap)
                 intervention = result.intervention
                 return Feedback(
@@ -192,10 +243,15 @@ class GeminiTutor:
                     lesson_title=result.student_progress.current_objective.replace("_", " "),
                     action=intervention.action, should_speak=intervention.should_speak,
                     structured=result.model_dump())
+            except ResponseReadError as error:
+                if attempt == 0 and error.retryable:
+                    log.warning("Gemini response was empty or truncated; retrying once")
+                    continue
+                raise
             except TutorError:
                 raise
             except (ValueError, TypeError):
-                raise TutorError("Gemini returned an unreadable structured response. Retry the analysis.") from None
+                raise TutorError("The Gemini SDK could not process this request configuration (response: sdk-configuration). Check the app version and selected model.") from None
             except Exception as error:
                 code = getattr(error, "code", None)
                 log.warning("Gemini analysis failed: category=%s attempt=%s", code or type(error).__name__, attempt + 1)

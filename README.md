@@ -1,12 +1,12 @@
 # AI Coding Buddy
 
 A Python/PySide6 desktop tutor for learning to write C code independently.
-Version **0.8** adds official Gemini analysis and optional Gemini Live voice.
+Version **0.8.1** adds official Gemini analysis and optional Gemini Live voice.
 The existing editor, robot and two-view interface are preserved.
 
 ## Start on Windows
 
-**Portable:** extract AI-Coding-Buddy-v0.8.zip, open the AI-Coding-Buddy folder,
+**Portable:** extract AI-Coding-Buddy-v0.8.1.zip, open the AI-Coding-Buddy folder,
 and run AI-Coding-Buddy.exe. Keep _internal and the notices beside it.
 
 **Source:** install Python 3.11 or later, extract this repository, run Setup.bat
@@ -117,3 +117,14 @@ Still outside this release: a sandboxed C compiler, long-term learning profiles,
 additional editor languages, and automatic acoustic echo cancellation.
 
 [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## Response diagnostics (0.8.1)
+
+The old unreadable-response error covered multiple failures. The app now checks
+finish reasons, uses SDK-parsed output when available, and distinguishes empty,
+truncated, filtered, malformed-JSON and SDK-configuration failures. Empty/truncated
+responses get at most one retry with a larger output budget. Gemini 3 models use
+LOW thinking, a supported setting, to leave more room for the structured answer.
+The exact cause of the reported 0.8 error could not be determined from its generic
+message alone. The new diagnostics allow that distinction without exposing keys
+or raw code. No live Gemini credentials were available for this fix.

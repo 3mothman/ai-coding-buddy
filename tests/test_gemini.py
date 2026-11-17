@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication
 
 from buddy.analysis import Feedback, Snapshot, TutorError
 from buddy.audio_io import PCMResampler, PlaybackBuffer, DuplexAudio
-from buddy.gemini_analysis import GeminiTutor, validate_result, AnalysisResult, DEFAULT_FLASH
+from buddy.gemini_analysis import GeminiTutor, validate_result, AnalysisResult, DEFAULT_FLASH, decode_response
 from buddy.live_voice import LiveVoice, TranscriptAccumulator, live_config
 from buddy.orchestration import AssistancePolicy, LearningOrchestrator
 from buddy.settings import Preferences, SettingsDialog
@@ -143,6 +143,60 @@ class GeminiAnalysisTests(unittest.TestCase):
         with self.assertRaises(TutorError):
             self.tutor().analyze(Snapshot("", "reference", "int a;"))
         self.assertFalse(FakeClient.calls)
+
+    def test_sdk_parsed_result_does_not_require_text(self):
+        self.assertEqual(decode_response(SimpleNamespace(parsed=result(prepare=True), text=None)), result(prepare=True))
+
+    def test_unspecified_prompt_block_reason_is_not_a_block(self):
+        response = types.GenerateContentResponse(prompt_feedback={"block_reason": "BLOCKED_REASON_UNSPECIFIED"})
+        response.parsed = result(prepare=True)
+        self.assertEqual(decode_response(response), result(prepare=True))
+
+    def test_empty_truncated_and_invalid_json_have_different_diagnostics(self):
+        for response, category in (
+            (SimpleNamespace(text=None), "empty-output"),
+            (SimpleNamespace(text='{', candidates=[SimpleNamespace(finish_reason="MAX_TOKENS")]), "truncated"),
+            (SimpleNamespace(text='not json'), "invalid-json"),
+            (SimpleNamespace(text='[]'), "expected-object"),
+        ):
+            with self.assertRaises(TutorError) as error:
+                decode_response(response)
+            self.assertIn(category, str(error.exception))
+
+    def test_fenced_json_is_accepted(self):
+        fence = chr(96) * 3
+        self.assertEqual(decode_response(SimpleNamespace(text=fence+'json\n'+json.dumps(result())+'\n'+fence)), result())
+
+    def test_provider_filter_is_identified_without_exposing_text(self):
+        with self.assertRaises(TutorError) as error:
+            decode_response(SimpleNamespace(text="private code test-key", candidates=[SimpleNamespace(finish_reason="SAFETY")]))
+        self.assertIn("filtered", str(error.exception))
+        self.assertNotIn("test-key", str(error.exception))
+
+    def test_truncated_generation_retries_once_with_larger_budget(self):
+        class TruncatedClient(FakeClient):
+            calls = []
+            def generate_content(self, **kwargs):
+                self.calls.append(kwargs)
+                if len(self.calls) == 1:
+                    return SimpleNamespace(text=None, candidates=[SimpleNamespace(finish_reason="MAX_TOKENS")])
+                return SimpleNamespace(parsed=result(prepare=True), text=None)
+        tutor = GeminiTutor(api_key="test", client_factory=TruncatedClient)
+        self.assertTrue(tutor.analyze(Snapshot("", "ref", "", reason="prepare")).structured)
+        self.assertEqual(len(TruncatedClient.calls), 2)
+        self.assertGreater(TruncatedClient.calls[1]["config"]["max_output_tokens"], TruncatedClient.calls[0]["config"]["max_output_tokens"])
+        self.assertEqual(TruncatedClient.calls[0]["config"]["thinking_config"]["thinking_level"], "LOW")
+
+    def test_persistent_empty_output_does_not_retry_indefinitely(self):
+        class EmptyClient(FakeClient):
+            calls = []
+            def generate_content(self, **kwargs):
+                self.calls.append(kwargs)
+                return SimpleNamespace(text=None)
+        with self.assertRaises(TutorError) as error:
+            GeminiTutor(api_key="test", client_factory=EmptyClient).analyze(Snapshot("", "ref", "", reason="prepare"))
+        self.assertEqual(len(EmptyClient.calls), 2)
+        self.assertIn("empty-output", str(error.exception))
 
     def test_progress_can_update_without_a_spoken_message(self):
         data = result("mark_step_completed", "")
