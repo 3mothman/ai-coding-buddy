@@ -1,12 +1,12 @@
 # AI Coding Buddy
 
 A Python/PySide6 desktop tutor for learning to write C code independently.
-Version **0.8.4** adds official Gemini analysis and optional Gemini Live voice.
+Version **0.8.5** adds official Gemini analysis and optional Gemini Live voice.
 The existing editor, robot and two-view interface are preserved.
 
 ## Start on Windows
 
-**Portable:** extract AI-Coding-Buddy-v0.8.4.zip, open the AI-Coding-Buddy folder,
+**Portable:** extract AI-Coding-Buddy-v0.8.5.zip, open the AI-Coding-Buddy folder,
 and run AI-Coding-Buddy.exe. Keep _internal and the notices beside it.
 
 **Source:** install Python 3.11 or later, extract this repository, run Setup.bat
@@ -118,7 +118,7 @@ additional editor languages, and automatic acoustic echo cancellation.
 
 [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-## Response diagnostics (0.8.4)
+## Response diagnostics (0.8.5)
 
 The old unreadable-response error covered multiple failures. The app now checks
 finish reasons, uses SDK-parsed output when available, and distinguishes empty,
@@ -129,8 +129,10 @@ The exact cause of the reported 0.8 error could not be determined from its gener
 message alone. The new diagnostics allow that distinction without exposing keys
 or raw code. No live Gemini credentials were available for this fix.
 
-Version 0.8.4 distinguishes Google HTTP 400 invalid-key errors from invalid requests, restricted projects, network timeouts, transport failures and service failures. Error messages never include raw provider text or keys. An intentional invalid-key request confirmed that Google returns HTTP 400 with API_KEY_INVALID; this does not establish the cause of any user screenshot.
+Version 0.8.5 distinguishes Google HTTP 400 invalid-key errors from invalid requests, restricted projects, network timeouts, transport failures and service failures. Error messages never include raw provider text or keys. An intentional invalid-key request confirmed that Google returns HTTP 400 with API_KEY_INVALID; this does not establish the cause of any user screenshot.
 
-Version 0.8.4: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
+Version 0.8.5: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
 
-Version 0.8.4 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
+Version 0.8.5 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
+
+Version 0.8.5 automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.

@@ -24,6 +24,16 @@ from buddy.orchestration import AssistancePolicy, LearningOrchestrator
 from buddy.settings import Preferences, SettingsDialog
 from buddy.window import MainWindow
 
+class LessonVoiceTests(unittest.TestCase):
+    def test_auto_start_requires_sound_consent_and_no_existing_session(self):
+        from unittest.mock import Mock
+        for consent, sound, running, expected in [(True, True, False, 1), (False, True, False, 0), (True, False, False, 0), (True, True, True, 0)]:
+            window = SimpleNamespace(provider=GeminiTutor(api_key="test"), voice_consent=consent,
+                sound_box=SimpleNamespace(isChecked=lambda: sound), voice=SimpleNamespace(running=running), toggle_live=Mock())
+            MainWindow.start_lesson_voice(window)
+            self.assertEqual(window.toggle_live.call_count, expected)
+
+
 class ApiFailureTests(unittest.TestCase):
     def test_google_invalid_key_is_http_400(self):
         from google.genai.errors import ClientError

@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.4")
+        self.setWindowTitle("AI Coding Buddy - v0.8.5")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -196,7 +196,7 @@ class MainWindow(QMainWindow):
         self.talk_button.setEnabled(False)
         self.talk_button.pressed.connect(self.begin_talking)
         self.talk_button.released.connect(self.end_talking)
-        left.addWidget(self.label("Start Live voice, then hold this button while speaking.", "subtitle"))
+        left.addWidget(self.label("Voice starts with your lesson. Hold this button while speaking.", "subtitle"))
         content.addWidget(left_panel)
         content.addWidget(self.editor, 3)
         scroll = QScrollArea()
@@ -540,6 +540,7 @@ class MainWindow(QMainWindow):
         self.controller.request(self.provider, snap)
 
     def receive_feedback(self, feedback):
+        starting_lesson = self._preparing
         if self._preparing:
             self._preparing = False
             self.start_button.setEnabled(True)
@@ -580,6 +581,8 @@ class MainWindow(QMainWindow):
                 self.voice.respond_tool(self.voice_tool_id, "Voice was stopped. Please use the text hint.", self.controller.revision, stale=True)
                 self.voice_tool_id = None
             self.show_message(combined, feedback.state)
+        if starting_lesson:
+            self.start_lesson_voice()
         self.snippet.setPlainText(feedback.snippet)
         self.snippet.setVisible(bool(feedback.snippet))
         self.current_question = feedback.question
@@ -655,6 +658,11 @@ class MainWindow(QMainWindow):
             "completed": memory.completed, "objective": memory.objective,
             "summary": memory.summary, "recent_conversation": list(memory.conversation)[-6:],
         }, self.controller.revision)
+
+    def start_lesson_voice(self):
+        if (isinstance(self.provider, GeminiTutor) and self.voice_consent
+                and self.sound_box.isChecked() and not self.voice.running):
+            self.toggle_live()
 
     def toggle_live(self):
         if self.voice.running:
