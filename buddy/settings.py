@@ -12,7 +12,7 @@ class Preferences:
     endpoint: str = ""
     model: str = ""
     sound: bool = True
-    automatic: bool = True
+    automatic: bool = False
 
 def settings_path():
     return Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation)) / "settings.json"
@@ -41,7 +41,7 @@ def save_preferences(preferences, path=None):
 class SettingsDialog(QDialog):
     def __init__(self, preferences, key="", enabled=False, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("AI provider & privacy - v0.4")
+        self.setWindowTitle("AI provider & privacy - v0.5")
         self.setMinimumWidth(520)
         layout = QFormLayout(self)
         description = QLabel("Demo mode stays offline. AI mode sends the task, reference code, your code, answers and recent hints to the provider below. Provider charges and privacy policies apply.")

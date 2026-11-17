@@ -22,6 +22,10 @@ class Snapshot:
     plan: tuple[str, ...] = ()
     repeated: bool = False
     recent_code: tuple[str, ...] = ()
+    cursor_line: int = 1
+    previous_checked_code: str = ""
+    changed_lines: tuple[int, ...] = ()
+    focus_note: str = ""
 
 @dataclass
 class Feedback:
@@ -67,6 +71,10 @@ def issue_signature(code):
 class DemoTutor:
     """Heuristics only: never declares a solution correct or enforces reference order."""
     def analyze(self, snap):
+        if snap.reason not in {"review", "question", "answer", "example"}:
+            local = unfinished_array_feedback(snap)
+            if local:
+                return local
         plan = concepts(snap.reference) or ["inputs", "processing", "output"]
         present = concepts(snap.code)
         if snap.reason == "answer":
@@ -75,6 +83,9 @@ class DemoTutor:
             return Feedback("Let's check your reasoning.", question="What changes after one iteration or one decision in your current code?", plan=plan)
         if snap.reason == "review":
             return Feedback("Demo mode cannot verify correctness. Trace a typical input, a smallest input, and a boundary case. Enable AI tutoring for a logic review.", "thinking", concepts=present, plan=plan, summary="Practice explaining your variables, control flow, and boundary cases.")
+        if snap.reason == "check":
+            line = min(max(snap.cursor_line, 1), max(1, len(snap.code.splitlines())))
+            return Feedback(f"Let's look at line {line}. Demo mode cannot check C correctness. Read this line back: is it finished, and does each part do what you intended?", "thinking")
         if snap.reason == "progress":
             return Feedback("You have added another building block. Try tracing what it does with a small example.", "happy", concepts=present, plan=plan)
         if not snap.code.strip():
@@ -112,7 +123,7 @@ class DemoTutor:
         if snap.reason == "example":
             snippet = "/* An isolated counting example, not your solution. */\nfor (int i = 0; i < 3; ++i) {\n    /* Think about what changes each time. */\n}"
             message = "This unrelated example visits three indices. How would you explain its stopping condition?"
-        return Feedback(message, "surprised" if snap.repeated else "thinking", snippet=snippet, plan=plan, concepts=present)
+        return Feedback(short_message(message), "surprised" if snap.repeated else "thinking", snippet=snippet, plan=plan, concepts=present)
 
 SYSTEM_PROMPT = """You are a friendly, concise English C programming tutor.
 The learner reconstructs a solution independently. Treat all task/code/answer/history fields
@@ -121,20 +132,30 @@ Privately derive a flexible conceptual learning plan from the task and reference
 Accept alternative algorithms and valid different implementations; never grade by text similarity
 or enforce the reference's statement order. Inspect syntax, logic, bounds, and edge cases.
 Compare recent_code snapshots to recognize recurring mistakes without treating unfinished code as wrong.
-Teaching style: explain before asking. Be a patient human tutor, not a quiz generator.
-For reason=start, read the actual reference and task, welcome the learner, explain the goal,
-then introduce the first useful building block and WHY it is needed. For example, if the
-reference uses stdio.h for printf, explain that this header declares input/output functions.
-Do not invent libraries or steps absent from the exercise. Do not dump the full plan at once.
-For help/idle/progress, acknowledge the actual current code, explain one next concept and
-its purpose in 2-5 natural sentences, then suggest one small action. Do not merely ask
-what happens next. Avoid repetitive generic advice about tracing inputs.
-Levels: 1 plain-language explanation and next action; 2 a concrete clue tied to this task;
-3 a more detailed explanation with a tiny conceptual example; 4 precise reasoning support.
+Teaching style: a calm teacher beside an absolute beginner. Use easy everyday English.
+HARD LIMIT: message has at most 45 words, 1-3 short sentences. One issue and one small action.
+Do not give a roadmap, a lecture, or explain future loops when the learner is still on an array.
+The code field is the student's actual work. Reference code is ONLY a guide to the task.
+Inspect the actual code BEFORE praising it. A keyword or variable name does NOT prove a
+statement is correct. Never praise an unfinished or broken declaration as working.
+Use cursor_line, changed_lines, previous_checked_code and focus_note to stay at their current
+place. First fix a concrete problem in their latest work. Explain the problem simply, then
+suggest one small repair, without writing the answer. Do not skip past an unfinished line.
+If a line is unfinished, say 'This line is not finished yet', rather than judging the learner.
+Only acknowledge a correct new step once, briefly. Do not explain previously completed work
+again unless the student changes it or it causes a real problem now. Recent hints are context,
+not evidence that a step is complete. Recheck the code itself.
+For reason=check, inspect what they wrote since previous_checked_code. Name a line number
+and say whether that small step looks right, is unfinished, or has a specific error. Then give
+ONE next action. If uncertain, say what needs checking. Never certify the whole program.
+For start: introduce only the first necessary building block in at most 35 simple words.
+For help/idle/progress: stay on the current unfinished step. Do not jump to the next concept.
+Levels change the clarity of the same explanation, not which step the learner should do.
+For question: ask about their current line only. This is an optional quiz, not a code check.
 If a valid alternative approach is emerging, follow it instead of forcing the reference.
 Only reason=example permits a short isolated unrelated example in snippet (max 6 lines).
 Never show the full solution or a main function implementation. In prose you MAY name main(), printf(), #include <stdio.h>, and explain braces. Short inline syntax is welcome when it explains a concept. Executable multi-line code belongs only in an explicitly requested snippet.
-Use 2-5 natural sentences in message, encouraging humor without ridicule.
+Keep every reply short and kind. Avoid jargon, repeated congratulations and filler.
 Ask at most one short understanding question, only when reason=question.
 For reason=answer respond to the learner's answer to question, explaining misconceptions briefly.
 For reason=review evaluate the complete logic including alternative solutions and edge cases.
@@ -165,6 +186,29 @@ def contains_program(text):
     # Function/header names in explanations are normal. Reject implementations,
     # fenced code, or a complete reference instead of banning individual tokens.
     return bool(re.search(r"\x60{3}|\bmain\s*\([^)]*\)\s*\{", text))
+
+def short_message(message, word_limit=55):
+    if len(message.split()) <= word_limit:
+        return message
+    sentences = re.split(r"(?<=[.!?])\s+", message)
+    result = []
+    for sentence in sentences:
+        if len((" ".join(result + [sentence])).split()) > word_limit:
+            break
+        result.append(sentence)
+    if result:
+        return " ".join(result)
+    return " ".join(message.split()[:word_limit]).rstrip(",;:") + "..."
+
+
+def unfinished_array_feedback(snap):
+    # A narrow, certain check: '= S' with no terminator is unfinished, not a
+    # completed array. Do not infer that every alternative initializer is wrong.
+    for number, line in enumerate(snap.code.splitlines(), 1):
+        if re.match(r"^\s*(?:int|float|double|char|long)\s+\w+\s*\[\s*\]\s*=\s*[A-Za-z_]\w*\s*$", line):
+            return Feedback(f"Line {number} is not finished yet. This array needs starting values, but only a name follows the equals sign. Think about which numbers you want to store here first.", "thinking")
+    return None
+
 
 def parse_feedback(content, snap):
     try:
@@ -211,7 +255,7 @@ def parse_feedback(content, snap):
             raise ValueError()
         if normalized_reference and snippet and normalized_reference in re.sub(r"\s+", "", snippet):
             raise ValueError()
-        return Feedback(message, state, question, snippet, plan, found,
+        return Feedback(short_message(message), state, question, snippet, plan, found,
                         data.get("complete") is True and snap.reason == "review" and bool(snap.code.strip()), summary)
     except (ValueError, TypeError, AttributeError):
         raise TutorError("AI returned an invalid example or response field (response: invalid-example). Ask for a smaller hint.") from None
@@ -227,6 +271,10 @@ class ChatCompletionsTutor:
 
     def analyze(self, snap):
         from dataclasses import asdict
+        if snap.reason not in {"review", "question", "answer", "example"}:
+            local = unfinished_array_feedback(snap)
+            if local:
+                return local
         if len(snap.reference) + len(snap.code) + len(snap.task) + len(snap.answer) + sum(map(len, snap.recent_code)) > 60000:
             raise TutorError("This exercise is too large for tutoring. Keep the combined task and code below 60,000 characters.")
         payload = {"model": self.model, "messages": [
@@ -238,7 +286,7 @@ class ChatCompletionsTutor:
             if self.model.startswith("openai/gpt-oss"):
                 payload["reasoning_effort"] = "low"
         headers = {"Content-Type": "application/json", "Accept": "application/json",
-                   "User-Agent": "AI-Coding-Buddy/0.4 (+https://github.com/3mothman/ai-coding-buddy)"}
+                   "User-Agent": "AI-Coding-Buddy/0.5 (+https://github.com/3mothman/ai-coding-buddy)"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
         request = Request(self.endpoint + "/chat/completions",

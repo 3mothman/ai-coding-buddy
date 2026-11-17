@@ -31,10 +31,10 @@ _internal folder and license notices together. Python is not needed for the port
 The executable is unsigned. Only run packages obtained from a source you trust.
 Source control contains the build scripts, not the large binary package.
 
-### From source â€” easiest setup
+### From source — easiest setup
 
 1. Install **Python 3.11 or later** with the Python Launcher.
-2. Download this repository with **Code â†’ Download ZIP** and extract it.
+2. Download this repository with **Code → Download ZIP** and extract it.
 3. Double-click **Setup.bat**. It creates a private environment and installs Qt.
 4. Double-click **Start.bat**.
 
@@ -207,3 +207,17 @@ Explanations may now name main(), #include, and braces. Full main implementation
 and reference disclosures remain blocked. Optional null fields are accepted, unknown
 expressions fall back to explaining, and parser failures include safe diagnostic
 categories without displaying raw provider text. Truncated responses are identified.
+
+## Current-step teaching (v0.5)
+
+Use **Check my code** to check what you have written and get one small next action.
+The tutor receives the cursor line and the code changes since the last accepted
+reply. **Ask me a question** is a separate understanding quiz. Automatic hints
+start off each time the app opens; you can enable them explicitly.
+
+The tutor is instructed to use at most 45 simple words. Displayed teaching messages
+are capped at 55 words. Structural keywords no longer trigger automatic praise.
+A narrow local check catches unfinished array initializers such as int numbers[]=S
+without declaring them correct or advancing to loops. Other checks remain AI
+assessments, not compiler validation. Model behavior has not been evaluated with
+your live credentials; existing response-format and network fixes are retained.

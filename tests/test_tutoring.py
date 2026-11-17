@@ -14,7 +14,7 @@ from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 from buddy.analysis import (
     Snapshot, Feedback, DemoTutor, ChatCompletionsTutor, TutorError,
-    concepts, issue_signature, parse_feedback, validate_endpoint,
+    concepts, issue_signature, parse_feedback, validate_endpoint, short_message,
 )
 from buddy.controller import TutorController
 from buddy.editor import CodeEditor
@@ -22,6 +22,22 @@ from buddy.settings import Preferences, save_preferences, load_preferences, Sett
 from buddy.window import MainWindow
 
 class AnalysisTests(unittest.TestCase):
+    def test_screenshot_unfinished_array_never_skips_to_loop(self):
+        code = "#include<stdio.h>\n\nint numbers[]=S"
+        for tutor in (DemoTutor(), ChatCompletionsTutor("http://localhost:1/v1", "test")):
+            result = tutor.analyze(Snapshot("Find largest", "", code, reason="check", cursor_line=3))
+            self.assertIn("Line 3", result.message)
+            self.assertIn("not finished", result.message)
+            self.assertNotIn("loop", result.message)
+            self.assertLessEqual(len(result.message.split()), 55)
+            self.assertFalse(result.complete)
+
+    def test_short_messages_end_at_a_sentence(self):
+        text = "Check this line first. " + "Next consider the condition. " * 30
+        result = short_message(text)
+        self.assertLessEqual(len(result.split()), 55)
+        self.assertTrue(result.endswith("."))
+
     def test_strings_and_comments_are_not_code(self):
         self.assertEqual(concepts('// for (int i=0;) {}\n"while ([)"'), [])
         self.assertEqual(issue_signature('puts("}"); /* [ */'), "")
@@ -279,12 +295,34 @@ class QtBehaviorTests(unittest.TestCase):
         self.assertFalse(dialog.consent.isChecked())
         dialog.close()
 
+    def test_manual_check_sends_current_line_and_changes(self):
+        with patch("buddy.window.load_preferences", return_value=Preferences(sound=False, automatic=True)), patch("buddy.window.save_preferences"):
+            window = MainWindow()
+            self.assertFalse(window.auto_box.isChecked())
+            window.reference_input.setPlainText("int main(void) { return 0; }")
+            with patch.object(window.controller, "request") as request:
+                window.start_learning()
+                window.editor.insertPlainText("#include <stdio.h>\nint numbers[]=S")
+                window.check_button.click()
+                snap = request.call_args.args[1]
+                self.assertEqual(snap.reason, "check")
+                self.assertEqual(snap.cursor_line, 2)
+                self.assertIn(2, snap.changed_lines)
+                self.assertEqual(snap.code, window.editor.toPlainText())
+                window.receive_feedback(Feedback("Line 2 is not finished yet."))
+                window.editor.insertPlainText(";")
+                window.check_button.click()
+                self.assertEqual(request.call_args.args[1].previous_checked_code, snap.code)
+            window.editor.document().setModified(False)
+            window.close()
+
     def test_auto_pause_and_demo_default(self):
         with patch("buddy.window.load_preferences", return_value=Preferences(sound=False)), patch("buddy.window.save_preferences"):
             window = MainWindow()
             self.assertIsInstance(window.provider, DemoTutor)
             window.reference_input.setPlainText("int main(void) { return 0; }")
             window.start_learning()
+            window.auto_box.setChecked(True)
             window.editor.insertPlainText("int value")
             self.assertEqual(window.pause_timer.interval(), 25000)
             self.assertTrue(window.pause_timer.isActive())
@@ -301,6 +339,7 @@ class QtBehaviorTests(unittest.TestCase):
             window = MainWindow()
             window.reference_input.setPlainText("int main(void) {}")
             window.start_learning()
+            window.auto_box.setChecked(True)
             window.editor.insertPlainText("int x")
             with patch.object(window, "ask") as ask:
                 window.last_message_time = time.monotonic()

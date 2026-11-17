@@ -2,6 +2,7 @@
 from collections import Counter
 from pathlib import Path
 import time
+from difflib import SequenceMatcher
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
@@ -36,6 +37,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.preferences = load_preferences()
         self.session = LearningSession()
+        self.last_checked_code = ""
+        self.requested_code = ""
         self.provider = DemoTutor()
         self.api_key = ""
         self.ai_enabled = False
@@ -65,7 +68,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy")
+        self.setWindowTitle("AI Coding Buddy - v0.5")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -180,7 +183,10 @@ class MainWindow(QMainWindow):
         right.addLayout(row)
         self.example_button = self.button("Show a small example", lambda: self.ask("example"), right)
         self.example_button.setEnabled(False)
-        self.button("Check understanding", lambda: self.ask("question"), right)
+        self.check_button = self.button("Check my code", lambda: self.ask("check"), right)
+        self.check_button.setObjectName("primary")
+        self.check_button.setToolTip("Check your current work and get one small next step.")
+        self.button("Ask me a question", lambda: self.ask("question"), right)
         self.answer = QLineEdit()
         self.answer.setPlaceholderText("Your answer to the buddy's question")
         self.answer.setMaxLength(2000)
@@ -193,7 +199,8 @@ class MainWindow(QMainWindow):
         self.answer_button.hide()
         self.button("Review my solution", lambda: self.ask("review"), right)
         self.auto_box = QCheckBox("Automatic hints")
-        self.auto_box.setChecked(self.preferences.automatic)
+        self.auto_box.setChecked(False)
+        self.preferences.automatic = False
         self.auto_box.toggled.connect(self.toggle_automatic)
         right.addWidget(self.auto_box)
         self.sound_box = QCheckBox("Sound")
@@ -284,6 +291,8 @@ class MainWindow(QMainWindow):
         self.editor.document().setModified(False)
         self.history, self.plan = [], []
         self.recent_code = []
+        self.last_checked_code = ""
+        self.requested_code = ""
         self.level = 1
         self.seen_concepts = set()
         self.issue_counts.clear()
@@ -331,8 +340,7 @@ class MainWindow(QMainWindow):
             self.level = 1
             self.example_button.setEnabled(False)
             self.hint_label.setText("Hint level 1 of 4")
-        if new and not signature and self.auto_box.isChecked() and time.monotonic() - self.last_message_time >= 45:
-            self.ask("progress")
+        # Structural keywords are not evidence of correctness. Only check actual work.
 
     def idle_hint(self):
         if not self.auto_box.isChecked() or self.pages.currentIndex() != 1:
@@ -345,8 +353,7 @@ class MainWindow(QMainWindow):
             self.pause_timer.start(int(remaining * 1000) + 10)
             return
         self.last_auto_code = code
-        reason = "question" if len(self.history) > 0 and len(self.history) % 4 == 0 and code.strip() else "idle"
-        self.ask(reason)
+        self.ask("check")
 
     def request_help(self):
         self.ask("help")
@@ -369,6 +376,12 @@ class MainWindow(QMainWindow):
         self.last_reason = reason
         self.last_message_time = time.monotonic()
         signature = issue_signature(self.editor.toPlainText())
+        current_code = self.editor.toPlainText()
+        changes = []
+        for tag, _, _, begin, end in SequenceMatcher(None, self.last_checked_code.splitlines(), current_code.splitlines()).get_opcodes():
+            if tag != "equal":
+                changes.extend(range(begin + 1, max(begin + 2, end + 1)))
+        self.requested_code = current_code
         snap = Snapshot(
             self.session.task, self.session.reference, self.editor.toPlainText(),
             5 if reason == "example" else self.level, reason,
@@ -376,10 +389,14 @@ class MainWindow(QMainWindow):
             self.current_question, tuple(self.history[-6:]), tuple(self.plan),
             self.issue_counts[signature] >= 2 if signature else False,
             tuple(self.recent_code),
+            self.editor.textCursor().blockNumber() + 1,
+            self.last_checked_code, tuple(changes),
+            "Inspect the current unfinished line first. Do not repeat completed headers. One small action only.",
         )
         self.controller.request(self.provider, snap)
 
     def receive_feedback(self, feedback):
+        self.last_checked_code = self.requested_code
         self.plan = feedback.plan or self.plan
         self.history.append(feedback.message)
         self.history = self.history[-12:]
