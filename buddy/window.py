@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.6")
+        self.setWindowTitle("AI Coding Buddy - v0.8.7")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -766,12 +766,12 @@ class MainWindow(QMainWindow):
             self.update_live_context()
         self.transcript_view.setPlainText("\n".join(self._transcript_rows + list(self._partial_transcripts.values())))
         self.transcript_view.verticalScrollBar().setValue(self.transcript_view.verticalScrollBar().maximum())
-        if role == "assistant":
-            self.bubble.setText(text)
+        # Speech transcripts stay in the transcript view. The full validated
+        # explanation remains visible even when playback is partial or interrupted.
 
     def repeat_message(self):
         if self.voice.is_connected:
-            self.voice.teach(self.bubble.text(), self.controller.revision)
+            self.voice.teach(self.history[-1] if self.history else self.bubble.text(), self.controller.revision)
         elif not isinstance(self.provider, GeminiTutor):
             self.speech.repeat()
 

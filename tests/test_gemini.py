@@ -444,6 +444,13 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(cancelled, ["a"])
         self.assertFalse(self.voice._pending_tools)
 
+    def test_invalidating_generation_releases_command_queue(self):
+        self.voice._generating = True
+        self.voice._authorized_output = True
+        self.voice._invalidate_output()
+        self.assertFalse(self.voice._generating)
+        self.assertFalse(self.voice._authorized_output)
+
     def test_microphone_is_muted_until_learner_talks(self):
         self.assertTrue(self.voice._mute)
         self.voice.mute(False)
