@@ -70,8 +70,12 @@ Use the actual assignment and reference to understand the required behavior. Nev
 code by line similarity. A correct while loop must be accepted in place of a for loop.
 Never enforce a reference statement order. Inspect syntax, bounds, data flow and logic.
 For reason=prepare, return reference understanding and a flexible plan of concept objectives
-with stable IDs and observable evidence of completion. Say what is ambiguous. Do not mark
-unwritten code complete. Give a friendly brief homework introduction and first step.
+with stable IDs and observable evidence of completion. Include beginner setup steps
+such as the needed header and main function for C, not only the algorithm.
+Say what is ambiguous. Do not mark
+unwritten code complete. Give a friendly brief homework introduction, a short overview of the stages,
+and explain the meaning and purpose of the FIRST step. Do not ask a beginner
+to declare arrays or variables without first explaining them.
 For later calls return reference=null and use reference_analysis, completed objectives,
 current objective, changed lines and cursor. Re-evaluate completion against CURRENT code;
 if a previously correct part is deleted or broken, remove its completed ID.
@@ -135,6 +139,10 @@ def safe_api_error(error, operation="Gemini analysis"):
         return f"{operation}: could not connect securely to Google (network-transport). Check your connection, proxy or firewall."
     # Never echo str(error), arbitrary exception names or server-supplied status.
     return f"{operation}: unexpected SDK failure (sdk-failure). Please report this category and the app version."
+
+
+class AnalysisValidationError(TutorError):
+    pass
 
 
 class ResponseReadError(TutorError):
@@ -228,7 +236,7 @@ def validate_result(value, snap):
             intervention.should_speak = True
         return result
     except (ValidationError, ValueError, KeyError, TypeError):
-        raise TutorError("Gemini returned an invalid analysis action. No editor changes were applied. Please retry.") from None
+        raise AnalysisValidationError("Gemini returned an invalid analysis action. No editor changes were applied. Please retry.") from None
 
 
 class GeminiTutor:
@@ -276,6 +284,14 @@ class GeminiTutor:
             except ResponseReadError as error:
                 if attempt == 0 and error.retryable:
                     log.warning("Gemini response was empty or truncated; retrying once")
+                    continue
+                raise
+            except AnalysisValidationError:
+                if attempt == 0:
+                    context["response_correction"] = ("Your previous response failed validation. Return the exact schema. "
+                        "Use only objective IDs from reference_analysis. For prepare, completed must be empty. "
+                        "Use line_start=0 and line_end=0 when no valid student line exists. "
+                        "Do not include snippets except for reason=example. Give one useful explanation of the current step.")
                     continue
                 raise
             except TutorError:

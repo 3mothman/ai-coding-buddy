@@ -104,6 +104,18 @@ class GeminiAnalysisTests(unittest.TestCase):
     def tutor(self):
         return GeminiTutor(api_key="test-key", client_factory=FakeClient, sleep=lambda _: None)
 
+    def test_invalid_response_gets_one_corrective_retry(self):
+        bad = result(prepare=True)
+        bad["student_progress"]["completed"] = ["invented"]
+        good = result(prepare=True)
+        with patch.object(FakeClient, "generate_content", side_effect=[
+            SimpleNamespace(text=json.dumps(bad)), SimpleNamespace(text=json.dumps(good))
+        ]) as generate:
+            feedback = self.tutor().analyze(Snapshot("task", "ref", "", reason="prepare"))
+            self.assertEqual(feedback.structured["student_progress"]["completed"], [])
+            self.assertEqual(generate.call_count, 2)
+            self.assertIn("response_correction", json.loads(generate.call_args.kwargs["contents"]))
+
     def test_initial_reference_is_structured_and_uses_official_contract(self):
         snap = Snapshot("Find greatest", "reference", "", reason="prepare")
         feedback = self.tutor().analyze(snap)

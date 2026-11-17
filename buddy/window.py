@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.2")
+        self.setWindowTitle("AI Coding Buddy - v0.8.3")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -293,7 +293,7 @@ class MainWindow(QMainWindow):
             self.sound_box.setEnabled(True if gemini else self.speech.available)
             if gemini:
                 self.speech.stop()
-                self.speech_note.setText("Gemini text mode; Start Live voice for natural audio. System speech is disabled.")
+                self.speech_note.setText("Gemini Live voice is connected." if self.voice.is_connected else "Start Live voice to hear the tutor. Text hints remain visible while audio is prepared.")
 
     def persist_preferences(self):
         try:
@@ -555,7 +555,7 @@ class MainWindow(QMainWindow):
                 self.voice_tool_id = None
             else:
                 self.voice.teach(combined, self.controller.revision)
-            self.bubble.setText("Buddy is preparing a spoken reply...")
+            self.bubble.setText(combined)
             self.character.set_state(feedback.state)
         else:
             if self.voice_tool_id:
@@ -666,6 +666,9 @@ class MainWindow(QMainWindow):
             self.mute_button.hide()
 
     def voice_connected(self, connected):
+        self.update_mode()
+        if connected and self.history and self.sound_box.isChecked():
+            self.voice.teach(self.history[-1], self.controller.revision)
         self.live_status.setText("Live voice connected: microphone on." if connected else "Live voice disconnected. Text tutoring is available.")
         self.mute_button.setVisible(connected)
         self.transcript_view.setVisible(connected or bool(self._transcript_rows))

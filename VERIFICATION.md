@@ -1,10 +1,10 @@
-# Verification — v0.8.2
+# Verification — v0.8.3
 
 Date: 17 November 2026. Platform: Windows, Python 3.11.
 
 | Check | Result |
 | --- | --- |
-| Automated suite | 88 tests passed in the final source suite |
+| Automated suite | 89 tests passed in the final source suite |
 | Official SDK configuration/schema validation | Passed, google-genai 3.4.0 |
 | Offline runtime script | Passed; live analysis explicitly marked not run |
 | 44.1/48 kHz capture conversion to 16 kHz | Passed synthetic streaming signal tests |
@@ -32,3 +32,5 @@ responses, MAX_TOKENS truncation, fenced JSON, filtered output, and bounded retr
 The root cause of the screenshot remains unconfirmed without its finish reason.
 
 HTTP error diagnostics were tested with real SDK error objects and a deliberate invalid diagnostic key (no successful inference or paid call). The user's actual connection failure remains unconfirmed until its diagnostic category is available.
+
+Version 0.8.3: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
