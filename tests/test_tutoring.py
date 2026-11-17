@@ -156,7 +156,8 @@ class AnalysisTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "settings.json"
             save_preferences(Preferences("https://example.com/v1", "test", False, False), path)
-            self.assertEqual(set(json.loads(path.read_text())), {"endpoint", "model", "sound", "automatic"})
+            self.assertTrue({"endpoint", "model", "sound", "automatic"}.issubset(json.loads(path.read_text())))
+            self.assertTrue({"api_key", "voice_consent", "reference", "code", "consent"}.isdisjoint(json.loads(path.read_text())))
             self.assertFalse(load_preferences(path).sound)
             path.write_text("broken")
             self.assertEqual(load_preferences(path), Preferences())

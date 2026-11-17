@@ -14,7 +14,9 @@ from .character import BuddyCharacter
 from .editor import CodeEditor
 from .session import LearningSession, read_reference
 from .analysis import Snapshot, DemoTutor, ChatCompletionsTutor, concepts, issue_signature
-from .controller import TutorController
+from .orchestration import LearningOrchestrator
+from .gemini_analysis import GeminiTutor
+from .live_voice import LiveVoice
 from .settings import SettingsDialog, load_preferences, save_preferences
 from .speech import SpeechService
 
@@ -52,23 +54,44 @@ class MainWindow(QMainWindow):
         self.issue_counts = Counter()
         self.last_issue = ""
         self.current_question = ""
+        self._displayed_objective = ""
         self.last_reason = ""
-        self.controller = TutorController(self)
+        self.voice = LiveVoice(self)
+        self.voice_consent = False
+        self.voice_tool_id = None
+        self.voice_tool_question = ""
+        self._preparing = False
+        self._deferred_reason = None
+        self._transcript_rows = []
+        self._partial_transcripts = {}
+        self.controller = LearningOrchestrator(self)
+        self.controller.state_changed.connect(self.update_live_context)
+        self.controller.policy.inactivity = self.preferences.inactivity
+        self.controller.policy.cooldown = self.preferences.cooldown
+        self.voice.tool_question.connect(self.voice_question)
+        self.voice.tool_cancelled.connect(self.voice_tool_cancelled)
+        self.voice.transcript.connect(self.receive_transcript)
+        self.voice.connected.connect(self.voice_connected)
+        self.voice.status.connect(lambda message: self.statusBar().showMessage(message))
+        self.voice.failure.connect(self.voice_failure)
+        self.voice.speaking.connect(self.live_speaking)
+        self.voice.listening.connect(lambda active: self.controller.voice_activity(listening=active))
         self.controller.result.connect(self.receive_feedback)
         self.controller.failure.connect(self.receive_error)
         self.controller.busy_changed.connect(self.set_busy)
         self.speech = SpeechService(self)
         self.speech.set_enabled(self.preferences.sound)
         self.speech.unavailable.connect(self.speech_error)
+        self.speech.speaking.connect(lambda active: self.controller.voice_activity(speaking=active))
         self.pause_timer = QTimer(self)
         self.pause_timer.setSingleShot(True)
-        self.pause_timer.setInterval(25000)
+        self.pause_timer.setInterval(self.preferences.inactivity * 1000)
         self.pause_timer.timeout.connect(self.idle_hint)
         self.progress_timer = QTimer(self)
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.7")
+        self.setWindowTitle("AI Coding Buddy - v0.8")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -77,6 +100,12 @@ class MainWindow(QMainWindow):
         self.build_start()
         self.build_learning()
         self.editor.textChanged.connect(self.code_changed)
+        self.reference_input.textChanged.connect(self.reference_changed)
+        self.task_input.textChanged.connect(self.reference_changed)
+        self.deferred_timer = QTimer(self)
+        self.deferred_timer.setSingleShot(True)
+        self.deferred_timer.setInterval(500)
+        self.deferred_timer.timeout.connect(self.run_deferred)
         action = QAction("Save code", self)
         action.setShortcut(QKeySequence.StandardKey.Save)
         action.triggered.connect(self.save_code)
@@ -126,6 +155,8 @@ class MainWindow(QMainWindow):
         self.reference_input.setPlaceholderText("Paste a C solution or import a .c / .txt file...")
         layout.addWidget(self.reference_input, 1)
         buttons = QHBoxLayout()
+        self.preparation_status = self.label("", "subtitle")
+        layout.addWidget(self.preparation_status)
         self.button("Import file...", self.import_code, buttons)
         buttons.addStretch()
         self.start_button = self.button("Start Learning", self.start_learning, buttons)
@@ -180,7 +211,7 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         self.button("Help", self.request_help, row)
         self.button("More help", self.more_help, row)
-        self.repeat_button = self.button("Repeat", self.speech.repeat, row)
+        self.repeat_button = self.button("Repeat", self.repeat_message, row)
         self.repeat_button.setEnabled(self.speech.available)
         right.addLayout(row)
         self.example_button = self.button("Show a small example", lambda: self.ask("example"), right)
@@ -193,7 +224,7 @@ class MainWindow(QMainWindow):
         self.answer.setPlaceholderText("Your answer to the buddy's question")
         self.answer.setMaxLength(2000)
         self.answer.setAccessibleName("Answer to understanding question")
-        self.answer.textChanged.connect(lambda: self.controller.invalidate())
+        self.answer.textEdited.connect(self.answer_edited)
         self.answer.returnPressed.connect(self.submit_answer)
         self.answer.hide()
         right.addWidget(self.answer)
@@ -209,6 +240,18 @@ class MainWindow(QMainWindow):
         self.sound_box.setChecked(self.preferences.sound and self.speech.available)
         self.sound_box.setEnabled(self.speech.available)
         self.sound_box.toggled.connect(self.toggle_sound)
+        self.live_button = self.button("Start Live voice", self.toggle_live, right)
+        self.mute_button = self.button("Mute microphone", self.toggle_microphone, right)
+        self.mute_button.setCheckable(True)
+        self.mute_button.hide()
+        self.live_status = self.label("Live voice requires Gemini and audio consent in AI settings.", "subtitle")
+        right.addWidget(self.live_status)
+        self.transcript_view = QPlainTextEdit()
+        self.transcript_view.setReadOnly(True)
+        self.transcript_view.setAccessibleName("Live conversation transcript")
+        self.transcript_view.setMaximumHeight(130)
+        self.transcript_view.hide()
+        right.addWidget(self.transcript_view)
         right.addWidget(self.sound_box)
         self.speech_note = self.label("", "subtitle")
         right.addWidget(self.speech_note)
@@ -227,7 +270,7 @@ class MainWindow(QMainWindow):
         self.speech.set_rate(-0.1)
         right.addWidget(self.label("Speech speed: slower to faster"))
         right.addWidget(self.speed)
-        self.button("Preview voice", lambda: self.speech.say("Let's build this program together, one step at a time."), right)
+        self.preview_button = self.button("Preview voice", lambda: self.speech.say("Let's build this program together, one step at a time."), right)
         self.review_label = self.label("", "subtitle")
         right.addWidget(self.review_label)
         right.addStretch()
@@ -240,6 +283,17 @@ class MainWindow(QMainWindow):
         mode = f"AI mode · {self.preferences.model}" if self.ai_enabled else "Demo mode · local rules, not AI"
         self.mode_label.setText(mode)
         self.statusBar().showMessage(mode)
+        if hasattr(self, "live_button"):
+            gemini = isinstance(self.provider, GeminiTutor)
+            self.live_button.setEnabled(gemini and self.voice_consent)
+            self.voice_choice.setEnabled(not gemini)
+            self.speed.setEnabled(not gemini)
+            self.preview_button.setEnabled(not gemini)
+            self.repeat_button.setEnabled(self.speech.available or self.voice.is_connected)
+            self.sound_box.setEnabled(True if gemini else self.speech.available)
+            if gemini:
+                self.speech.stop()
+                self.speech_note.setText("Gemini text mode; Start Live voice for natural audio. System speech is disabled.")
 
     def persist_preferences(self):
         try:
@@ -248,16 +302,35 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Preferences could not be saved. They still apply for this session.")
 
     def open_settings(self):
-        dialog = SettingsDialog(self.preferences, self.api_key, self.ai_enabled, self)
+        dialog = SettingsDialog(self.preferences, self.api_key, self.ai_enabled, self, live_enabled=self.voice_consent)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        self.controller.invalidate()
+        self.stop_live()
+        backend_changed = (
+            self.preferences.provider != ("gemini" if dialog.presets.currentIndex() == 3 else "compatible")
+            or self.preferences.model != dialog.model.text().strip()
+            or self.api_key != dialog.key.text().strip())
+        if backend_changed:
+            self.controller.reset()
+        else:
+            self.controller.invalidate()
         self.speech.stop()
+        self.preferences.provider = "gemini" if dialog.presets.currentIndex() == 3 else "compatible"
+        self.preferences.live_model = dialog.live_model.text().strip()
+        self.preferences.live_voice = dialog.live_voice.currentText()
+        self.preferences.language = dialog.language.currentText()
+        self.preferences.headphones = dialog.headphones.isChecked()
+        self.preferences.inactivity = dialog.inactivity.value()
+        self.preferences.cooldown = dialog.cooldown.value()
+        self.controller.policy.inactivity = self.preferences.inactivity
+        self.controller.policy.cooldown = self.preferences.cooldown
+        self.pause_timer.setInterval(self.preferences.inactivity * 1000)
+        self.voice_consent = dialog.voice_consent.isChecked() and self.preferences.provider == "gemini"
         self.preferences.endpoint = dialog.endpoint.text().strip()
         self.preferences.model = dialog.model.text().strip()
         self.api_key = dialog.key.text().strip()
         self.ai_enabled = dialog.consent.isChecked()
-        self.provider = ChatCompletionsTutor(self.preferences.endpoint, self.preferences.model, self.api_key) if self.ai_enabled else DemoTutor()
+        self.provider = dialog.make_provider() if self.ai_enabled else DemoTutor()
         self.plan = []
         self.history = []
         self.recent_code = []
@@ -286,12 +359,18 @@ class MainWindow(QMainWindow):
         if not reference.strip():
             return
         self.controller.invalidate()
+        self.stop_live()
+        self.controller.reset()
         self.session = LearningSession(self.task_input.toPlainText().strip(), reference)
         self.task_label.setText(self.session.task or "Reconstruct the solution in your own way.")
         self.task_label.setToolTip(self.session.task)
         self.editor.clear()
         self.editor.document().setModified(False)
         self.history, self.plan = [], []
+        self._transcript_rows = []
+        self._partial_transcripts = {}
+        self.transcript_view.clear()
+        self.transcript_view.hide()
         self.recent_code = []
         self.last_checked_code = ""
         self.requested_code = ""
@@ -308,13 +387,34 @@ class MainWindow(QMainWindow):
         self.snippet.hide()
         self.example_button.setEnabled(False)
         self.hint_label.setText("Hint level 1 of 4")
+        if isinstance(self.provider, GeminiTutor):
+            self._preparing = True
+            self.start_button.setEnabled(False)
+            self.preparation_status.setText("Understanding the task and reference before practice...")
+            self.statusBar().showMessage("Understanding the task and reference before practice...")
+            self.last_reason = "prepare"
+            self.controller.request(self.provider, Snapshot(self.session.task, self.session.reference, "", reason="prepare", language=self.preferences.language))
+            return
         self.pages.setCurrentIndex(1)
         self.editor.setFocus()
         self.show_message("I'm reading your reference. We'll build this together, one concept at a time.", "neutral")
         self.ask("start")
 
+    def reference_changed(self):
+        if self._preparing:
+            self._preparing = False
+            self.controller.invalidate()
+            self.preparation_status.setText("Task changed. Start Learning again to analyze this version.")
+            self.start_button.setEnabled(bool(self.reference_input.toPlainText().strip()))
+            self.statusBar().showMessage("Task changed. Start Learning again to analyze this version.")
+
     def code_changed(self):
-        self.controller.invalidate()
+        self.editor.set_analysis_range(0, 0)
+        self.controller.edited(self.editor.toPlainText())
+        if self.voice_tool_id:
+            self.voice.respond_tool(self.voice_tool_id, "The code changed. Ask again about the current version.", self.controller.revision, stale=True)
+            self.voice_tool_id = None
+        self.update_live_context()
         self.speech.stop()
         self.snippet.hide()
         self.review_label.clear()
@@ -338,11 +438,17 @@ class MainWindow(QMainWindow):
         if signature and signature != self.last_issue:
             self.issue_counts[signature] += 1
         self.last_issue = signature
-        if new:
+        if new and not isinstance(self.provider, GeminiTutor):
             self.level = 1
             self.example_button.setEnabled(False)
             self.hint_label.setText("Hint level 1 of 4")
         # Structural keywords are not evidence of correctness. Only check actual work.
+        if (isinstance(self.provider, GeminiTutor) and self.auto_box.isChecked()
+                and code.rstrip().endswith((";", "}"))
+                and self.controller.policy.can_analyze(time.monotonic(), self.controller.last_edit,
+                                                       self.controller.revision, minimum_idle=1.8)):
+            self.last_auto_code = code
+            self.ask("auto")
 
     def idle_hint(self):
         if not self.auto_box.isChecked() or self.pages.currentIndex() != 1:
@@ -350,15 +456,26 @@ class MainWindow(QMainWindow):
         code = self.editor.toPlainText()
         if code == self.last_auto_code or self.current_question:
             return
-        remaining = 45 - (time.monotonic() - self.last_message_time)
+        remaining = self.preferences.cooldown - (time.monotonic() - self.last_message_time)
         if remaining > 0:
             self.pause_timer.start(int(remaining * 1000) + 10)
             return
-        self.last_auto_code = code
-        self.ask("check")
+        if isinstance(self.provider, GeminiTutor):
+            if not self.controller.policy.can_analyze(time.monotonic(), self.controller.last_edit, self.controller.revision):
+                self.pause_timer.start(1000)
+                return
+            self.last_auto_code = code
+            self.ask("auto")
+        else:
+            self.last_auto_code = code
+            self.ask("check")
 
     def request_help(self):
         self.ask("help")
+
+    def answer_edited(self):
+        self.controller.invalidate()
+        self.update_live_context()
 
     def more_help(self):
         self.level = min(4, self.level + 1)
@@ -370,6 +487,15 @@ class MainWindow(QMainWindow):
 
     def ask(self, reason):
         if self.pages.currentIndex() != 1:
+            return
+        if isinstance(self.provider, GeminiTutor) and not self.controller.memory.reference:
+            self.show_message("Start a new exercise so Gemini can analyze the reference first.", "thinking")
+            return
+        policy = self.controller.policy
+        if reason not in {"voice_question", "auto"} and (policy.speaking or policy.listening or time.monotonic() - policy.last_voice_activity < 2):
+            self._deferred_reason = reason
+            self.deferred_timer.start()
+            self.statusBar().showMessage("I'll check this after the conversation pauses.")
             return
         if reason == "example" and self.level < 4:
             return
@@ -394,17 +520,48 @@ class MainWindow(QMainWindow):
             self.editor.textCursor().blockNumber() + 1,
             self.last_checked_code, tuple(changes),
             "Teach the current concept: meaning, purpose, symbols, then one action. After a correct step teach the next one. Do not repeat completed headers.",
+            voice_question=self.voice_tool_question if reason == "voice_question" else "",
+            language=self.preferences.language,
         )
         self.controller.request(self.provider, snap)
 
     def receive_feedback(self, feedback):
+        if self._preparing:
+            self._preparing = False
+            self.start_button.setEnabled(True)
+            self.preparation_status.clear()
+            self.pages.setCurrentIndex(1)
+            self.editor.setFocus()
+        if feedback.action == "stay_silent":
+            return
+        if feedback.structured:
+            diagnosis = feedback.structured["analysis"]
+            self.editor.set_analysis_range(diagnosis["line_start"], diagnosis["line_end"], diagnosis["issue"])
+            objective = feedback.structured["student_progress"]["current_objective"]
+            if self._displayed_objective and objective != self._displayed_objective:
+                self.level = 1
+                self.example_button.setEnabled(False)
+                self.hint_label.setText("Hint level 1 of 4")
+            self._displayed_objective = objective
         self.lesson_heading.setText(feedback.lesson_title or "Your current step")
         self.last_checked_code = self.requested_code
         self.plan = feedback.plan or self.plan
         self.history.append(feedback.message)
         self.history = self.history[-12:]
-        combined = feedback.message + ("\n\n" + feedback.question if feedback.question else "")
-        self.show_message(combined, feedback.state)
+        combined = feedback.message + ("\n\n" + feedback.question if feedback.question and feedback.question != feedback.message else "")
+        if self.voice.is_connected and self.sound_box.isChecked() and feedback.should_speak:
+            if self.voice_tool_id:
+                self.voice.respond_tool(self.voice_tool_id, combined, self.controller.revision)
+                self.voice_tool_id = None
+            else:
+                self.voice.teach(combined, self.controller.revision)
+            self.bubble.setText("Buddy is preparing a spoken reply...")
+            self.character.set_state(feedback.state)
+        else:
+            if self.voice_tool_id:
+                self.voice.respond_tool(self.voice_tool_id, "Voice was stopped. Please use the text hint.", self.controller.revision, stale=True)
+                self.voice_tool_id = None
+            self.show_message(combined, feedback.state)
         self.snippet.setPlainText(feedback.snippet)
         self.snippet.setVisible(bool(feedback.snippet))
         self.current_question = feedback.question
@@ -421,6 +578,13 @@ class MainWindow(QMainWindow):
                 self.pause_timer.stop()
 
     def receive_error(self, message):
+        if self._preparing:
+            self._preparing = False
+            self.start_button.setEnabled(True)
+            self.preparation_status.setText(message + " Press Start Learning to retry.")
+        if self.voice_tool_id:
+            self.voice.respond_tool(self.voice_tool_id, "Analysis failed. Ask the learner to retry.", self.controller.revision, stale=True)
+            self.voice_tool_id = None
         self.show_message(message + " You can retry Help or switch to demo in AI settings.", "surprised")
 
     def set_busy(self, busy):
@@ -434,7 +598,8 @@ class MainWindow(QMainWindow):
         self.bubble.setText(message)
         self.character.set_state(state)
         self.last_message_time = time.monotonic()
-        self.speech.say(message)
+        if not isinstance(self.provider, GeminiTutor):
+            self.speech.say(message)
 
     def toggle_automatic(self, enabled):
         self.preferences.automatic = enabled
@@ -448,8 +613,116 @@ class MainWindow(QMainWindow):
 
     def toggle_sound(self, enabled):
         self.preferences.sound = enabled
-        self.speech.set_enabled(enabled)
+        self.speech.set_enabled(enabled and not isinstance(self.provider, GeminiTutor))
+        if not enabled and self.voice.running:
+            self.stop_live()
         self.persist_preferences()
+
+    def run_deferred(self):
+        policy = self.controller.policy
+        if policy.speaking or policy.listening or time.monotonic() - policy.last_voice_activity < 2:
+            self.deferred_timer.start()
+            return
+        reason, self._deferred_reason = self._deferred_reason, None
+        if reason:
+            self.ask(reason)
+
+    def update_live_context(self):
+        memory = self.controller.memory
+        reference = memory.reference or {}
+        self.voice.update_context({
+            "assignment": self.session.task,
+            "reference_summary": reference.get("reference_summary", ""),
+            "code": self.editor.toPlainText()[:40000] if hasattr(self, "editor") else "",
+            "completed": memory.completed, "objective": memory.objective,
+            "summary": memory.summary, "recent_conversation": list(memory.conversation)[-6:],
+        }, self.controller.revision)
+
+    def toggle_live(self):
+        if self.voice.running:
+            self.stop_live()
+            return
+        if not isinstance(self.provider, GeminiTutor) or not self.voice_consent:
+            self.live_status.setText("Enable Gemini and microphone consent in AI settings first.")
+            return
+        if not self.controller.memory.reference:
+            self.live_status.setText("Analyze the reference by starting this exercise again first.")
+            return
+        self.speech.stop()
+        self.speech.set_enabled(False)
+        self.sound_box.setChecked(True)
+        self.update_live_context()
+        self.live_button.setText("Stop Live voice")
+        self.live_status.setText("Connecting... microphone will start after connection.")
+        self.voice.start(self.provider.api_key, self.preferences.live_model,
+                         self.preferences.live_voice, self.preferences.language, self.preferences.headphones)
+
+    def stop_live(self):
+        self.voice.stop()
+        self.voice_tool_id = None
+        self.controller.voice_activity(speaking=False, listening=False)
+        if hasattr(self, "live_button"):
+            self.live_button.setText("Start Live voice")
+            self.mute_button.hide()
+
+    def voice_connected(self, connected):
+        self.live_status.setText("Live voice connected: microphone on." if connected else "Live voice disconnected. Text tutoring is available.")
+        self.mute_button.setVisible(connected)
+        self.transcript_view.setVisible(connected or bool(self._transcript_rows))
+        self.repeat_button.setEnabled(connected or self.speech.available)
+        if not self.voice.running:
+            self.live_button.setText("Start Live voice")
+
+    def toggle_microphone(self):
+        muted = self.mute_button.isChecked()
+        self.voice.mute(muted)
+        self.mute_button.setText("Unmute microphone" if muted else "Mute microphone")
+        self.live_status.setText("Microphone muted." if muted else "Microphone on.")
+
+    def live_speaking(self, active):
+        self.controller.voice_activity(speaking=active)
+        self.character.set_talking(active)
+
+    def voice_failure(self, message):
+        self.live_status.setText(message + " Text tutoring still works.")
+        self.live_button.setText("Start Live voice")
+
+    def voice_question(self, call_id, question):
+        if self.voice_tool_id:
+            self.voice.respond_tool(self.voice_tool_id, "A newer question replaced this one.", self.controller.revision, stale=True)
+        self.voice_tool_id = call_id
+        self.voice_tool_question = question
+        self.controller.memory.remember("user", question)
+        self.ask("voice_question")
+
+    def voice_tool_cancelled(self, call_id):
+        if self.voice_tool_id == call_id:
+            self.voice_tool_id = None
+            self.controller.invalidate()
+
+    def receive_transcript(self, role, text, final, interrupted):
+        prefix = "You" if role == "user" else "AI Buddy"
+        if interrupted:
+            # Received transcription can lead playback; do not claim the tail was heard.
+            text = "[Interrupted; received text may include an unplayed ending] " + text
+        elif role == "assistant" and not final:
+            prefix += " (playing; partial)"
+        self._partial_transcripts[role] = prefix + ": " + text
+        if final:
+            self._transcript_rows.append(self._partial_transcripts.pop(role))
+            self._transcript_rows = self._transcript_rows[-20:]
+            self.controller.memory.remember(role, text)
+            self.update_live_context()
+        self.transcript_view.setPlainText("\n".join(self._transcript_rows + list(self._partial_transcripts.values())))
+        self.transcript_view.verticalScrollBar().setValue(self.transcript_view.verticalScrollBar().maximum())
+        if role == "assistant":
+            self.bubble.setText(text)
+
+    def repeat_message(self):
+        if self.voice.is_connected:
+            self.voice.teach(self.bubble.text(), self.controller.revision)
+        elif not isinstance(self.provider, GeminiTutor):
+            self.speech.repeat()
 
     def choose_voice(self, index):
         voice = self.voice_choice.itemData(index)
@@ -488,7 +761,8 @@ class MainWindow(QMainWindow):
 
     def new_exercise(self):
         if self.may_discard():
-            self.controller.invalidate()
+            self.stop_live()
+            self.controller.reset()
             self.pause_timer.stop()
             self.progress_timer.stop()
             self.speech.stop()
@@ -499,6 +773,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         if self.may_discard():
+            self.stop_live()
+            self.deferred_timer.stop()
             self.controller.shutdown()
             self.pause_timer.stop()
             self.progress_timer.stop()

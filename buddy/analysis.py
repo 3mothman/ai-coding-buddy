@@ -28,6 +28,15 @@ class Snapshot:
     changed_lines: tuple[int, ...] = ()
     focus_note: str = ""
     lesson_context: str = ""
+    reference_analysis: dict | None = None
+    completed_objectives: tuple[str, ...] = ()
+    current_objective: str = ""
+    session_summary: str = ""
+    conversation: tuple[dict, ...] = ()
+    voice_question: str = ""
+    language: str = "English"
+    revision: int = 0
+    repeated_mistakes: tuple[tuple[str, int], ...] = ()
 
 @dataclass
 class Feedback:
@@ -40,6 +49,9 @@ class Feedback:
     complete: bool = False
     summary: str = ""
     lesson_title: str = ""
+    action: str = "show_hint"
+    should_speak: bool = True
+    structured: dict | None = None
 
 class TutorError(Exception):
     """A safe, user-facing failure without keys or provider response bodies."""

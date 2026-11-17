@@ -1,5 +1,16 @@
 # Third-party components
 
+The Gemini upgrade additionally uses google-genai (Apache-2.0), Pydantic (MIT),
+python-sounddevice/PortAudio, NumPy (BSD), and Python-SoXR/libsoxr. Their installed
+license notices are copied into the portable package. Consult the bundled license
+texts for the exact terms and retained third-party notices.
+
+Project links:
+https://github.com/googleapis/python-genai
+https://github.com/spatialaudio/python-sounddevice
+https://numpy.org/doc/stable/license.html
+https://github.com/dofuuz/python-soxr
+
 AI Coding Buddy uses Python, Qt for Python (PySide6 and Shiboken6), and Qt.
 Their original copyrights and license terms remain applicable.
 

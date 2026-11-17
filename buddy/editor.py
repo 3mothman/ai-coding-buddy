@@ -74,6 +74,8 @@ class CodeEditor(QPlainTextEdit):
         self.setTabStopDistance(self.fontMetrics().horizontalAdvance(" ") * 4)
         self.setAccessibleName("Your C code")
         self.setPlaceholderText("Your own solution starts here...")
+        self._analysis_selections = []
+        self._local_selections = []
         self.highlighter = CHighlighter(self.document())
         self.gutter = LineNumbers(self)
         self.blockCountChanged.connect(self.update_margin)
@@ -113,8 +115,22 @@ class CodeEditor(QPlainTextEdit):
             selection.format.setUnderlineColor(QColor("#ff7b86"))
             selection.format.setToolTip("This closing bracket does not match the current opening bracket.")
             selections.append(selection)
-        self.setExtraSelections(selections)
+        self._local_selections = selections
+        self.setExtraSelections(selections + self._analysis_selections)
         self.setToolTip(f"{len(errors)} mismatched closing bracket(s). Local checks cover delimiters only.")
+
+    def set_analysis_range(self, start, end, issue=""):
+        self._analysis_selections = []
+        if 1 <= start <= end <= self.blockCount():
+            for number in range(start, end + 1):
+                selection = QTextEdit.ExtraSelection()
+                cursor = QTextCursor(self.document().findBlockByNumber(number - 1))
+                cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                selection.cursor = cursor
+                selection.format.setBackground(QColor("#542c3d"))
+                selection.format.setToolTip(issue)
+                self._analysis_selections.append(selection)
+        self.setExtraSelections(self._local_selections + self._analysis_selections)
 
     def gutter_width(self):
         return 16 + self.fontMetrics().horizontalAdvance("9") * len(str(max(1, self.blockCount())))

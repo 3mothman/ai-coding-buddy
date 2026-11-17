@@ -16,6 +16,8 @@ def main():
     app.setOrganizationName("AI Coding Buddy")
     window = MainWindow()
     if "--smoke-test" in sys.argv:
+        from buddy.runtime_checks import verify_offline_runtime
+        verify_offline_runtime()
         window.speech.set_enabled(False)
         window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen)
         window.show()

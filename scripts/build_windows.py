@@ -14,6 +14,12 @@ def main():
         sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
         "--windowed", "--onedir", "--name", "AI-Coding-Buddy",
         "--hidden-import", "PySide6.QtTextToSpeech",
+        "--collect-all", "google.genai",
+        "--collect-all", "soxr",
+        "--collect-all", "_sounddevice_data",
+        "--copy-metadata", "google-genai",
+        "--copy-metadata", "sounddevice",
+        "--collect-data", "certifi",
         "--exclude-module", "PySide6.QtWebEngineCore",
         "--exclude-module", "PySide6.QtWebEngineWidgets",
         "--exclude-module", "PySide6.QtPdf",
@@ -31,13 +37,13 @@ def main():
         raise RuntimeError("Unexpected bundle path")
     for name in ("icuuc.dll", "icudt78.dll"):
         (internal / name).unlink(missing_ok=True)
-    for name in ("README.md", "THIRD_PARTY_NOTICES.md"):
+    for name in ("README.md", "THIRD_PARTY_NOTICES.md", "GEMINI_UPGRADE.md", "VERIFICATION.md"):
         shutil.copy2(ROOT / name, output / name)
     shutil.copytree(ROOT / "licenses", output / "licenses", dirs_exist_ok=True)
     python_license = Path(sys.base_prefix) / "LICENSE.txt"
     if python_license.exists():
         shutil.copy2(python_license, output / "licenses" / "Python.txt")
-    for package in ("PySide6-Essentials", "PySide6-Addons", "shiboken6", "PyInstaller"):
+    for package in ("PySide6-Essentials", "PySide6-Addons", "shiboken6", "PyInstaller", "google-genai", "sounddevice", "numpy", "soxr", "pydantic"):
         distribution = importlib.metadata.distribution(package)
         for entry in distribution.files or []:
             if "licenses" in entry.parts:

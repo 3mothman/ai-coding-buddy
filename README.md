@@ -1,46 +1,16 @@
 # AI Coding Buddy
 
-A friendly desktop tutor that helps you understand a C solution by writing it yourself.
-
-**Python + PySide6. English interface. Windows first. No account, browser, or editor extension required.**
-
-## What works
-
-- Paste a task and reference solution, or import a C/text file.
-- Start Learning opens a blank editor. Your reference stays out of the learning view.
-- C syntax highlighting, line numbers, automatic indentation, undo/redo and saving.
-- Five animated robot states: neutral, thinking, happy, surprised and explaining.
-- Clearly labelled offline demo with simple local rules.
-- Optional AI tutoring through a configurable Chat Completions-compatible provider.
-- Background requests; typing, changing settings or starting another exercise invalidates old replies.
-- Pause detection after 25 seconds, with a 45-second interruption cooldown and no repeated automatic hints for unchanged code.
-- Local recognition of new code structures and recurring delimiter patterns. AI mode also receives up to three recent code snapshots to reason about repeated mistakes.
-- Four escalating hint levels, plus a short example only after explicitly pressing **Show a small example**.
-- Understanding questions, typed answers and a solution-review summary.
-- English text-to-speech when a supported English system voice is available; sound toggle and replay.
-- A portable Windows build script and automated tests.
+A Python/PySide6 desktop tutor for learning to write C code independently.
+Version **0.8** adds official Gemini analysis and optional Gemini Live voice.
+The existing editor, robot and two-view interface are preserved.
 
 ## Start on Windows
 
-### Portable application
+**Portable:** extract AI-Coding-Buddy-v0.8.zip, open the AI-Coding-Buddy folder,
+and run AI-Coding-Buddy.exe. Keep _internal and the notices beside it.
 
-Extract the entire **AI-Coding-Buddy-Windows.zip** package, then double-click
-**AI-Coding-Buddy.exe** inside the extracted folder. Keep the executable, its
-_internal folder and license notices together. Python is not needed for the portable build.
-
-The executable is unsigned. Only run packages obtained from a source you trust.
-Source control contains the build scripts, not the large binary package.
-
-### From source — easiest setup
-
-1. Install **Python 3.11 or later** with the Python Launcher.
-2. Download this repository with **Code → Download ZIP** and extract it.
-3. Double-click **Setup.bat**. It creates a private environment and installs Qt.
-4. Double-click **Start.bat**.
-
-Setup needs internet access. Day-to-day demo use does not.
-
-### From a terminal
+**Source:** install Python 3.11 or later, extract this repository, run Setup.bat
+once, then Start.bat. Setup needs internet access.
 
 ```powershell
 py -3 -m venv .venv
@@ -48,201 +18,102 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe main.py
 ```
 
-## A three-step learning session
+## Connect Gemini
 
-1. Paste the task and reference code, or import a `.c` / `.txt` file.
-2. Press **Start Learning**.
-3. Write your own solution. The buddy asks questions and offers small hints without editing your code.
+1. Get a key from [Google AI Studio](https://aistudio.google.com/api-keys).
+2. In **AI settings**, select **Gemini (official Google SDK)**.
+3. Defaults: analysis model **gemini-3.8-flash**, Live model **gemini-3.8-live**.
+   Checked against Google's documentation on 17 November 2026. Account access can
+   differ; model IDs remain editable.
+4. Enter the key in the masked field, or set GEMINI_API_KEY before launching.
+   Keys are kept in memory and are not saved.
+5. Read and enable code-transfer consent. **Test connection** sends only a built-in
+   sample and checks the structured analysis response.
+6. Save, paste/import the task and reference, and press **Start Learning**.
+   Gemini analyzes the reference first; practice opens with a blank editor after success.
 
-**Help** requests a hint at the current level. **More help** advances through four
-levels. At level 4, **Show a small example** becomes available; it never inserts
-anything into your editor. New code concepts reset the hint level.
+The app starts in offline demo mode each time. Groq and other compatible providers
+remain available as legacy options; the new Gemini/Live features need Gemini.
 
-**Check understanding** asks a question. Type an answer and press Enter or
-**Submit answer**. Editing the code hides questions tied to the previous state.
+## Natural voice and microphone
 
-**Review my solution** requests a logic review and a short summary. A positive AI
-review is explicitly provisional: the program does not compile or execute C.
-Demo mode never certifies correctness.
+Choose a Live voice and English or German in Gemini settings. Enable the
+**separate audio-transfer consent**, then save. In the learning view press
+**Start Live voice**. The microphone is not opened before that explicit start.
 
-Uncheck **Automatic hints** to work quietly. Manual help remains available.
-Use **Sound** to mute speech and **Repeat** to replay the last message.
+- Headphones permit full-duplex speech and interruptions.
+- **Mute microphone** stops audio transmission; **Stop Live voice** closes the session.
+- Speaker-safe mode gates capture during playback. It avoids echo but is not
+  acoustic echo cancellation and cannot provide full-duplex barge-in.
+- Google Live provides the speech and both transcripts. The existing bubble shows
+  the output audio transcription, not separately generated unrelated text.
+- Partial text is marked while playing. Interrupted text is marked as received,
+  potentially including an unplayed ending.
+- Gemini mode does not fall back to Windows TTS. If Live fails, text tutoring works.
+  System speech is retained for demo/legacy-provider use only.
 
-## Connect an AI provider
+## Learning controls
 
-The app always starts in offline demo mode, even when a provider was configured
-previously. No API key is bundled.
+**Check my code** checks current work. **Help** asks for a guiding question or hint.
+**More help** increases support through four levels; a tiny example requires an
+explicit request. **Ask me a question** is a separate understanding quiz.
 
-1. Open **AI settings**.
-2. Enter your provider's **API base URL**, usually ending in `/v1`.
-3. Enter the **model identifier** supplied by that provider.
-4. Enter your **API key** if the provider requires one.
-5. Read and check the consent box, then save.
+Session memory keeps the task, a flexible concept plan, progress evidence, current
+objective, recent conversation, prior hints and recurring issues. Valid alternative
+implementations are allowed. AI assessments are provisional, not compiler validation.
 
-The provider must accept `POST {base_url}/chat/completions` with a system message,
-a user message and `stream: false`, and return text in
-`choices[0].message.content`. The model must follow JSON output instructions.
-This is a replaceable compatibility adapter, not a promise that every model or
-provider supports the same protocol.
+**Automatic hints** start off. Enable them if desired and configure inactivity
+(default 25 seconds) and unsolicited-hint cooldown (default 45 seconds).
+Meaningful statement/block changes are debounced, with at least 10 seconds between
+background requests. Analysis waits during speech and two seconds afterward.
+A pause requests a decision: the analyzer can stay silent. Python filters
+duplicates and low-confidence unsolicited hints.
 
-HTTPS is required for remote services. Local servers can use HTTP on
-`localhost`, `127.0.0.1`, or `::1`. No redirects are followed.
-Provider charges, limits and retention policies depend on the chosen service.
+The editor keeps highlighting, line numbers, indentation, undo/redo and saving.
+Gemini may highlight a validated student-code range; it cannot write into the editor.
+The app never compiles or executes student C code.
 
-The AI derives a flexible concept plan, examines the task and code rather than
-text similarity, and is instructed to accept valid alternative implementations.
-It receives recent hints to avoid repetition. Prompt instructions plus output
-validation limit solution disclosure; model judgments and instructions are not
-a formal guarantee.
+## Tests and architecture
 
-## Privacy and local files
-
-- Demo mode makes no API requests.
-- AI mode sends the task, reference code, current/recent student code, answers,
-  concept plan and recent hints to the configured provider only after consent.
-- API keys and consent live in memory only and must be entered/enabled again
-  after restarting. Keys are not logged or stored in the repository.
-- Only endpoint, model, sound and automatic-hint preferences are saved as JSON,
-  in Qt's per-user application configuration directory.
-- Changing the provider URL or model clears the consent checkbox.
-- Disabling AI stops future submissions and invalidates pending replies;
-  already transmitted data cannot be recalled.
-- Exercise code is not automatically persisted. **Save** / **Ctrl+S** writes
-  only your own code. Unsaved edits trigger a save/discard/cancel prompt.
-- Imports are limited to 1 MB; UTF-8 (including BOM) and Windows-1252 are supported.
-- AI requests are limited to 60,000 combined task/code/history characters.
-- A running network request has a 25-second socket timeout. Closing the app
-  discards its result, though process shutdown may wait for the worker to finish.
-
-## Build a Windows package
-
-Run **Build.bat**, or:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe scripts\build_windows.py
-```
-
-The script creates `dist/AI-Coding-Buddy/`, copies third-party notices,
-runs a noninteractive executable smoke test, and produces
-`dist/AI-Coding-Buddy-Windows.zip`. This is a portable folder, not an installer.
-Build on Windows. Qt DLLs remain separate and replaceable.
-
-## Tests
+See [GEMINI_UPGRADE.md](GEMINI_UPGRADE.md) for diagnosis, exact file changes,
+architecture, API references, verification and live acceptance scenarios.
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe scripts\check_gemini.py
 ```
 
-Tests cover file import, saving, a blank learning editor, unsaved-change handling,
-hint levels, completion guards, response validation, local mock HTTP requests,
-authentication errors, blocked redirects, consent changes, privacy, indentation,
-highlighting, pause cooldowns, background request ordering and stale replies.
+The second command checks SDK/audio dependencies offline. To explicitly send
+built-in code scenarios to the real model (API usage may be charged), configure
+GEMINI_API_KEY locally, then run:
 
-The HTTP integration test uses a local mock server, not a paid service.
-A live provider test requires your own configuration and consent. Speech depends
-on an installed operating-system voice; if unavailable, text tutoring still works.
+```powershell
+.\.venv\Scripts\python.exe scripts\check_gemini.py --run-live-analysis --report gemini-verification.json
+```
 
-## Project structure
+The script records observations for human review, not a correctness certificate.
+No live key was available during development: actual Gemini reasoning quality,
+STT accuracy, audible naturalness and end-to-end latency remain unverified.
+Mocked tests do not establish those qualities.
 
-| File | Responsibility |
-| --- | --- |
-| `main.py` | Application startup and packaged smoke test |
-| `buddy/window.py` | Start/learning views and interaction flow |
-| `buddy/editor.py` | C editor, gutter, highlighting and indentation |
-| `buddy/analysis.py` | Shared tutoring data, offline rules and HTTP adapter |
-| `buddy/controller.py` | Bounded background work and stale-response rejection |
-| `buddy/character.py` | Robot drawing, five expressions and speech animation |
-| `buddy/speech.py` | Qt speech and graceful fallback |
-| `buddy/settings.py` | Provider consent and nonsecret preferences |
-| `buddy/session.py` | In-memory exercise and bounded file import |
-| `examples/` | A small C reference and practice ideas |
-| `scripts/build_windows.py` | Portable Windows packaging |
-| `tests/` | Offline and mocked integration tests |
+## Build
 
-## Boundaries and future work
+Run Build.bat, or install requirements-dev.txt and run
+`python scripts/build_windows.py` in the project environment. Build on Windows.
+The script bundles the SDK/audio dependencies, includes notices, runs an offline
+executable smoke test, and creates a portable ZIP.
 
-This completes the planned MVP phases: base app, activity monitoring, provider
-integration, voice/character behavior, and testing/packaging. Demo checks are
-heuristics, not a C parser. AI reviews may miss errors or reject valid solutions.
-The app deliberately does not execute untrusted code.
+## Privacy
 
-Still outside this version: a sandboxed compiler/test runner, microphone input,
-3D characters, additional programming languages, accounts/cloud sync and
-long-term learning statistics.
+After consent, analysis sends the task, reference, student code and compact
+learning/conversation context to Google. Live additionally sends microphone audio.
+Keys, consent, transcripts, code and resumption handles stay in app memory.
+Only nonsecret preferences are persisted. No microphone recordings are written.
+Exercise code is saved only through **Save**. Providers apply their own charges,
+limits and data policies. Disabling consent cannot recall data already sent.
+Diagnostic logs contain failure categories, not keys or raw provider responses.
 
-Technical references: [Qt plain text editor](https://doc.qt.io/qtforpython-6/PySide6/QtWidgets/QPlainTextEdit.html),
-[Qt speech](https://doc.qt.io/qtforpython-6/PySide6/QtTextToSpeech/QTextToSpeech.html),
-[Chat Completions API format](https://developers.openai.com/api/reference/typescript/resources/chat).
-See [third-party notices](THIRD_PARTY_NOTICES.md).
+Still outside this release: a sandboxed C compiler, long-term learning profiles,
+additional editor languages, and automatic acoustic echo cancellation.
 
-## Teaching and connection update
-
-The buddy now explains the purpose of the next building block before asking you
-to write it. Groq requests explicitly ask for JSON and use low reasoning effort
-for GPT-OSS. AI settings include Groq/local-server presets and a sample-only
-connection test. No real Groq credentials were used during development.
-
-The learning panel offers installed English voice selection, preview and speed.
-Voice quality depends on installed voices. Function names and identifiers have
-distinct colours. Mismatched closing brackets receive red squiggles after a short
-pause; these checks are not full compiler diagnostics.
-
-A local server can be connected through http://localhost:11434/v1 using the exact
-installed model name. No model weights or local inference runtime are bundled.
-A narrow teaching task still requires a capable code model; hardware, model
-license, download size, and teaching accuracy must be evaluated before bundling.
-
-## Groq HTTP 403 fix
-
-Version 0.3 sends an explicit application User-Agent. A live unauthenticated
-probe reproduced HTTP 403 / gateway code 1010 with Python-urllib and reached
-Groq authentication (HTTP 401) with the application identifier. Real account
-authentication still requires your key. Known organization/project model
-permission errors are distinguished without exposing raw response bodies.
-
-## Response handling fix (0.4)
-
-Explanations may now name main(), #include, and braces. Full main implementations
-and reference disclosures remain blocked. Optional null fields are accepted, unknown
-expressions fall back to explaining, and parser failures include safe diagnostic
-categories without displaying raw provider text. Truncated responses are identified.
-
-## Current-step teaching (v0.5)
-
-Use **Check my code** to check what you have written and get one small next action.
-The tutor receives the cursor line and the code changes since the last accepted
-reply. **Ask me a question** is a separate understanding quiz. Automatic hints
-start off each time the app opens; you can enable them explicitly.
-
-The tutor is instructed to use at most 45 simple words. Displayed teaching messages
-are capped at 55 words. Structural keywords no longer trigger automatic praise.
-A narrow local check catches unfinished array initializers such as int numbers[]=S
-without declaring them correct or advancing to loops. Other checks remain AI
-assessments, not compiler validation. Model behavior has not been evaluated with
-your live credentials; existing response-format and network fixes are retained.
-
-## Guided concept lessons (v0.6)
-
-The earlier 55-word rule is replaced by a lesson: meaning, purpose, notation,
-and one action to try. A friendly homework introduction is requested at startup.
-Structured lessons keep their paragraphs and are not cut off by the old word cap.
-After a completed step the tutor teaches one next concept, instead of repeating
-it or issuing a bare command. Header-only work is explicitly contextualized so
-the tutor introduces the entry point before asking for arrays and counts.
-
-Technical wording distinguishes headers and functions from C language constructs:
-stdio.h declares functions such as printf; for and while are built into C.
-Lessons may explain small inline syntax without revealing the complete solution.
-These changes are tested with local fixtures. Live model teaching quality still
-needs user evaluation; the app does not claim compiler-verified correctness.
-
-## Adaptive feedback (v0.7)
-
-A small typo gets a short correction, not the full lesson template. The known
-#incloud typo is caught locally on Check my code, including repeated checks.
-Help can still explain the concept. AI responses can choose correction mode;
-then the four lesson fields are not appended. New concepts keep the explained
-lesson format. Harmless Markdown code fences and empty main skeletons are
-accepted, while nonempty main implementations and full reference echoes remain
-blocked. No live account credentials were used in these regression tests.
+[Third-party notices](THIRD_PARTY_NOTICES.md)
