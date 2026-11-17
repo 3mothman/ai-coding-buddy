@@ -425,6 +425,13 @@ class LiveTests(unittest.TestCase):
         self.assertEqual(cancelled, ["a"])
         self.assertFalse(self.voice._pending_tools)
 
+    def test_microphone_is_muted_until_learner_talks(self):
+        self.assertTrue(self.voice._mute)
+        self.voice.mute(False)
+        self.assertFalse(self.voice._mute)
+        self.voice.mute(True)
+        self.assertTrue(self.voice._audio.muted)
+
     def test_mock_live_session_streams_audio_and_sends_authoritative_tool_result(self):
         sent = []
         voice = self.voice
@@ -439,6 +446,7 @@ class LiveTests(unittest.TestCase):
                 sent.append(("tool", kwargs))
 
         async def run():
+            voice.mute(False)  # learner holds the talk button
             voice._pending_tools.add("q1")
             voice._commands.append(("tool", {"id": "q1", "message": "It keeps the greatest value.", "stale": False}, 0))
             tasks = [asyncio.create_task(voice._send_audio(Session())), asyncio.create_task(voice._send_commands(Session()))]
@@ -446,7 +454,7 @@ class LiveTests(unittest.TestCase):
             voice.stop_event.set()
             await asyncio.gather(*tasks)
         asyncio.run(run())
-        self.assertTrue(any(kind == "audio" and data["audio"].mime_type == "audio/pcm;rate=16000" for kind, data in sent))
+        self.assertTrue(any(kind == "audio" and "audio" in data and data["audio"].mime_type == "audio/pcm;rate=16000" for kind, data in sent))
         response = next(data for kind, data in sent if kind == "tool")["function_responses"][0]
         self.assertEqual(response.response["approved_message"], "It keeps the greatest value.")
 

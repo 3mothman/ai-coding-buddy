@@ -91,7 +91,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.3")
+        self.setWindowTitle("AI Coding Buddy - v0.8.4")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -185,6 +185,19 @@ class MainWindow(QMainWindow):
         layout.addLayout(toolbar)
         content = QHBoxLayout()
         self.editor = CodeEditor()
+        left_panel = QWidget()
+        left_panel.setMaximumWidth(230)
+        left = QVBoxLayout(left_panel)
+        left.addWidget(self.label("OBJECTIVE", "subtitle"))
+        self.objective_label = self.label("Start your exercise to see the current goal.", "bubble")
+        left.addWidget(self.objective_label)
+        left.addStretch()
+        self.talk_button = self.button("Hold to talk", lambda: None, left)
+        self.talk_button.setEnabled(False)
+        self.talk_button.pressed.connect(self.begin_talking)
+        self.talk_button.released.connect(self.end_talking)
+        left.addWidget(self.label("Start Live voice, then hold this button while speaking.", "subtitle"))
+        content.addWidget(left_panel)
         content.addWidget(self.editor, 3)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -364,6 +377,7 @@ class MainWindow(QMainWindow):
         self.session = LearningSession(self.task_input.toPlainText().strip(), reference)
         self.task_label.setText(self.session.task or "Reconstruct the solution in your own way.")
         self.task_label.setToolTip(self.session.task)
+        self.objective_label.setText("Preparing your first step...")
         self.editor.clear()
         self.editor.document().setModified(False)
         self.history, self.plan = [], []
@@ -544,6 +558,10 @@ class MainWindow(QMainWindow):
                 self.hint_label.setText("Hint level 1 of 4")
             self._displayed_objective = objective
         self.lesson_heading.setText(feedback.lesson_title or "Your current step")
+        current = self.controller.memory.objective
+        objectives = (self.controller.memory.reference or {}).get("objectives", [])
+        title = next((step["title"] for step in objectives if step["id"] == current), feedback.lesson_title)
+        self.objective_label.setText(title or "Work on your current step.")
         self.last_checked_code = self.requested_code
         self.plan = feedback.plan or self.plan
         self.history.append(feedback.message)
@@ -665,12 +683,23 @@ class MainWindow(QMainWindow):
             self.live_button.setText("Start Live voice")
             self.mute_button.hide()
 
+    def begin_talking(self):
+        if self.voice.is_connected:
+            self.voice.mute(False)
+            self.talk_button.setText("Listening — release to send")
+
+    def end_talking(self):
+        self.voice.mute(True)
+        self.talk_button.setText("Hold to talk")
+
     def voice_connected(self, connected):
+        self.talk_button.setEnabled(connected)
+        self.end_talking()
         self.update_mode()
         if connected and self.history and self.sound_box.isChecked():
             self.voice.teach(self.history[-1], self.controller.revision)
-        self.live_status.setText("Live voice connected: microphone on." if connected else "Live voice disconnected. Text tutoring is available.")
-        self.mute_button.setVisible(connected)
+        self.live_status.setText("Live voice ready. Hold the talk button to speak." if connected else "Live voice disconnected. Text tutoring is available.")
+        self.mute_button.setVisible(False)
         self.transcript_view.setVisible(connected or bool(self._transcript_rows))
         self.repeat_button.setEnabled(connected or self.speech.available)
         if not self.voice.running:

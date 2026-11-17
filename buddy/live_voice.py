@@ -101,7 +101,7 @@ class LiveVoice(QObject):
         self._last_context_sent = -1
         self._last_activity = -1e9
         self._last_mic_activity = -1e9
-        self._mute = False
+        self._mute = True
         self._sent_audio_end = False
         self._output_done = False
         self._authorized_output = False
@@ -117,7 +117,7 @@ class LiveVoice(QObject):
         self.stop_event.clear()
         self._resume_handle = None
         self._commands.clear()
-        self._mute = False
+        self._mute = True
         self.thread = threading.Thread(target=self._thread_main,
             args=(api_key, model, voice, language, headphones), daemon=True, name="buddy-gemini-live")
         self.thread.start()
