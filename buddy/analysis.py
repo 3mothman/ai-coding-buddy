@@ -225,7 +225,8 @@ class ChatCompletionsTutor:
             payload["response_format"] = {"type": "json_object"}
             if self.model.startswith("openai/gpt-oss"):
                 payload["reasoning_effort"] = "low"
-        headers = {"Content-Type": "application/json", "Accept": "application/json"}
+        headers = {"Content-Type": "application/json", "Accept": "application/json",
+                   "User-Agent": "AI-Coding-Buddy/0.3 (+https://github.com/3mothman/ai-coding-buddy)"}
         if self.api_key:
             headers["Authorization"] = "Bearer " + self.api_key
         request = Request(self.endpoint + "/chat/completions",
@@ -238,7 +239,25 @@ class ChatCompletionsTutor:
             data = json.loads(body)
             return parse_feedback(data["choices"][0]["message"]["content"], snap)
         except HTTPError as error:
-            error.close()
+            # Inspect only known error codes; never display arbitrary provider bodies,
+            # which may echo API keys or exercise content.
+            status = error.code
+            try:
+                raw = error.read(16384).decode("utf-8", errors="replace")
+            finally:
+                error.close()
+            if status == 403 and re.search(r"error code:\s*1010\b", raw, re.I):
+                raise TutorError("The network security gateway blocked this client (HTTP 403, code 1010). Use the latest app build. If it persists, check your proxy or network filtering.") from None
+            provider_code = ""
+            try:
+                detail = json.loads(raw).get("error", {})
+                if isinstance(detail, dict):
+                    provider_code = detail.get("code", "")
+            except (ValueError, AttributeError):
+                pass
+            if status == 403 and provider_code in {"model_permission_blocked_org", "model_permission_blocked_project"}:
+                scope = "organization" if provider_code.endswith("org") else "project"
+                raise TutorError(f"Groq blocked this model in your {scope} permissions. Enable the selected model in Groq Console settings, then test again.") from None
             messages = {401: "Authentication failed. Check the API key.",
                         404: "Model or endpoint not found. Check the exact model ID and base URL.",
                         400: "The provider rejected the request. Check model compatibility and available context size.",

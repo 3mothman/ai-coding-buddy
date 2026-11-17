@@ -101,6 +101,7 @@ class ProviderTests(unittest.TestCase):
             def do_POST(self):
                 raw = self.rfile.read(int(self.headers["Content-Length"]))
                 cls.requests.append((self.path, json.loads(raw), self.headers.get("Authorization")))
+                cls.last_agent = self.headers.get("User-Agent", "")
                 self.send_response(cls.status)
                 if cls.status == 302:
                     self.send_header("Location", "/stolen")
@@ -130,6 +131,7 @@ class ProviderTests(unittest.TestCase):
         result = ChatCompletionsTutor(self.endpoint, "test-model", "test-key").analyze(Snapshot("Find a maximum", "reference", "student", level=3))
         self.assertEqual(result.state, "thinking")
         path, payload, auth = self.requests[0]
+        self.assertTrue(self.last_agent.startswith("AI-Coding-Buddy/"))
         self.assertEqual(path, "/v1/chat/completions")
         self.assertEqual(auth, "Bearer test-key")
         context = json.loads(payload["messages"][1]["content"])
@@ -144,6 +146,14 @@ class ProviderTests(unittest.TestCase):
             ChatCompletionsTutor(self.endpoint, "test", "test-key").analyze(Snapshot("", "", ""))
         self.assertIn("Authentication", str(failure.exception))
         self.assertNotIn("test-key", str(failure.exception))
+
+    def test_model_permission_error_is_specific(self):
+        type(self).status = 403
+        type(self).response = {"error": {"code": "model_permission_blocked_project", "message": "secret-key"}}
+        with self.assertRaises(TutorError) as failure:
+            ChatCompletionsTutor(self.endpoint, "test").analyze(Snapshot("", "", ""))
+        self.assertIn("project permissions", str(failure.exception))
+        self.assertNotIn("secret-key", str(failure.exception))
 
     def test_redirect_not_followed(self):
         type(self).status = 302

@@ -31,10 +31,10 @@ _internal folder and license notices together. Python is not needed for the port
 The executable is unsigned. Only run packages obtained from a source you trust.
 Source control contains the build scripts, not the large binary package.
 
-### From source — easiest setup
+### From source â€” easiest setup
 
 1. Install **Python 3.11 or later** with the Python Launcher.
-2. Download this repository with **Code → Download ZIP** and extract it.
+2. Download this repository with **Code â†’ Download ZIP** and extract it.
 3. Double-click **Setup.bat**. It creates a private environment and installs Qt.
 4. Double-click **Start.bat**.
 
@@ -192,3 +192,11 @@ A local server can be connected through http://localhost:11434/v1 using the exac
 installed model name. No model weights or local inference runtime are bundled.
 A narrow teaching task still requires a capable code model; hardware, model
 license, download size, and teaching accuracy must be evaluated before bundling.
+
+## Groq HTTP 403 fix
+
+Version 0.3 sends an explicit application User-Agent. A live unauthenticated
+probe reproduced HTTP 403 / gateway code 1010 with Python-urllib and reached
+Groq authentication (HTTP 401) with the application identifier. Real account
+authentication still requires your key. Known organization/project model
+permission errors are distinguished without exposing raw response bodies.
