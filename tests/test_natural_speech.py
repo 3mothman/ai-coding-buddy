@@ -5,7 +5,8 @@ from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import patch
 import wave
-from buddy.natural_speech import synthesize
+from buddy.natural_speech import synthesize, NaturalSpeech
+from unittest.mock import Mock
 
 
 class NaturalSpeechTests(unittest.TestCase):
@@ -35,6 +36,20 @@ class NaturalSpeechTests(unittest.TestCase):
             self.assertEqual(wav.getnframes(), 300)
             self.assertEqual(wav.getframerate(), 24000)
             self.assertEqual(wav.readframes(300), b'\x01\x00' * 100 + b'\x02\x00' * 200)
+
+    def test_playback_starts_before_generation_finishes(self):
+        speech = NS(stream=Mock(), started=False, done=False,
+            queue=NS(pending=24000), rate=24000, speaking=Mock(), status=Mock())
+        NaturalSpeech._pump(speech)
+        speech.stream.start.assert_called_once()
+        self.assertTrue(speech.started)
+        self.assertFalse(speech.done)
+
+    def test_short_buffer_waits_for_more_audio(self):
+        speech = NS(stream=Mock(), started=False, done=False,
+            queue=NS(pending=1000), rate=24000, speaking=Mock(), status=Mock())
+        NaturalSpeech._pump(speech)
+        speech.stream.start.assert_not_called()
 
     def test_interrupted_generation_is_not_played_as_complete(self):
         with self.assertRaisesRegex(RuntimeError, 'interrupted'):

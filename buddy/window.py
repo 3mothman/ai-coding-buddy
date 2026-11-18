@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.10")
+        self.setWindowTitle("AI Coding Buddy - v0.8.11")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -313,7 +313,7 @@ class MainWindow(QMainWindow):
             self.preview_button.setEnabled(self.speech.available)
             self.repeat_button.setEnabled(self.speech.available or self.voice.is_connected)
             self.sound_box.setEnabled(True if gemini else self.speech.available)
-            self.speech_note.setText("Natural Gemini voice reads complete clips. Microphone input is off.")
+            self.speech_note.setText("Natural Gemini voice streams audio as it arrives. Microphone input is off.")
 
     def persist_preferences(self):
         try:

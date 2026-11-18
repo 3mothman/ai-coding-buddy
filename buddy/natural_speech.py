@@ -2,11 +2,11 @@
 import asyncio
 import io
 import wave
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QBuffer, QByteArray, QIODevice
-from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool, QTimer
+from .audio_io import PlaybackBuffer, PCMResampler
 
 
-async def synthesize(key, model, voice, text):
+async def synthesize(key, model, voice, text, on_chunk=None):
     from google import genai
     from .gemini_analysis import safe_api_error
     pcm = bytearray()
@@ -29,6 +29,8 @@ async def synthesize(key, model, voice, text):
                                 data = part.inline_data
                                 if data and data.data and (data.mime_type or "").startswith("audio/pcm"):
                                     pcm.extend(data.data)
+                                    if on_chunk:
+                                        on_chunk(data.data)
                                     if len(pcm) > 24000 * 2 * 180:
                                         raise RuntimeError("Speech exceeded the three-minute playback limit.")
                         if content.turn_complete:
@@ -52,6 +54,7 @@ async def synthesize(key, model, voice, text):
 
 class Result(QObject):
     ready = Signal(int, bytes, str)
+    chunk = Signal(int, bytes)
 
 
 class Job(QRunnable):
@@ -62,7 +65,7 @@ class Job(QRunnable):
 
     def run(self):
         try:
-            self.signals.ready.emit(self.token, asyncio.run(synthesize(*self.args)), "")
+            self.signals.ready.emit(self.token, asyncio.run(synthesize(*self.args, on_chunk=lambda data: self.signals.chunk.emit(self.token, data))), "")
         except Exception as error:
             self.signals.ready.emit(self.token, b"", str(error))
 
@@ -75,40 +78,91 @@ class NaturalSpeech(QObject):
         super().__init__(parent)
         self.token = 0
         self.jobs = {}
-        self.buffer = None
-        self.player = QMediaPlayer(self)
-        self.output = QAudioOutput(self)
-        self.output.setVolume(1.0)
-        self.player.setAudioOutput(self.output)
-        self.player.playbackStateChanged.connect(lambda state: self.speaking.emit(state == QMediaPlayer.PlaybackState.PlayingState))
-        self.player.errorOccurred.connect(lambda *_: self.status.emit("Audio playback failed. Check the Windows output device and press Repeat."))
+        self.stream = None
+        self.queue = PlaybackBuffer(24000 * 2 * 180)
+        self.resampler = None
+        self.done = False
+        self.started = False
+        self.timer = QTimer(self)
+        self.timer.setInterval(30)
+        self.timer.timeout.connect(self._pump)
 
     def stop(self):
         self.token += 1
-        self.player.stop()
+        self.timer.stop()
+        if self.stream:
+            self.stream.stop()
+            self.stream.close()
+            self.stream = None
+        self.queue.clear()
+        self.started = False
+        self.speaking.emit(False)
 
     def say(self, key, model, voice, text):
         self.stop()
+        self.done = False
         token = self.token
         job = Job(token, (key, model, voice, text))
         self.jobs[token] = job
         job.signals.ready.connect(self._ready)
-        self.status.emit("Generating the complete natural voice clip...")
+        job.signals.chunk.connect(self._chunk)
+        self.status.emit("Waiting for the first Gemini audio chunks...")
         QThreadPool.globalInstance().start(job)
+
+    def _chunk(self, token, data):
+        if token != self.token:
+            return
+        try:
+            if self.stream is None:
+                import sounddevice as sd
+                device = sd.query_devices(kind="output")
+                rate = int(device["default_samplerate"])
+                self.resampler = PCMResampler(24000, rate)
+                self.queue.maximum = rate * 2 * 180
+                self.rate = rate
+                self.stream = sd.RawOutputStream(channels=1, dtype="int16", samplerate=rate,
+                    callback=self._play, blocksize=max(240, rate // 50))
+                self.timer.start()
+            converted = self.resampler.convert(data)
+            if converted and not self.queue.put(converted):
+                raise RuntimeError("buffer full")
+        except Exception:
+            self.stop()
+            self.status.emit("Audio output failed. Check the Windows output device and press Repeat.")
+
+    def _play(self, output, frames, timing, status):
+        output[:] = self.queue.take(frames * 2)
+
+    def _pump(self):
+        if not self.stream:
+            return
+        # Start after 400 ms, not after the entire explanation has arrived.
+        if not self.started and (self.queue.pending >= int(self.rate * 2 * 0.4) or self.done):
+            self.stream.start()
+            self.started = True
+            self.speaking.emit(True)
+            self.status.emit("Reading aloud — Gemini audio is streaming.")
+        elif self.started and self.done and not self.queue.pending:
+            # Drain device latency before closing the output.
+            self.timer.stop()
+            token = self.token
+            QTimer.singleShot(250, lambda: self._finish(token))
+
+    def _finish(self, token):
+        if token == self.token:
+            self.stop()
+            self.status.emit("Reading finished.")
 
     def _ready(self, token, data, error):
         self.jobs.pop(token, None)
         if token != self.token:
             return
         if error:
+            self.stop()
             self.status.emit(error)
             return
-        self.player.setSourceDevice(None)
-        if self.buffer:
-            self.buffer.close()
-        self.buffer = QBuffer(self)
-        self.buffer.setData(QByteArray(data))
-        self.buffer.open(QIODevice.OpenModeFlag.ReadOnly)
-        self.player.setSourceDevice(self.buffer)
-        self.status.emit("Playing the complete natural voice clip.")
-        self.player.play()
+        if self.resampler:
+            tail = self.resampler.convert(b"", final=True)
+            if tail:
+                self.queue.put(tail)
+        self.done = True

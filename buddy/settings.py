@@ -58,7 +58,7 @@ def save_preferences(preferences, path=None):
 class SettingsDialog(QDialog):
     def __init__(self, preferences, key="", enabled=False, parent=None, live_enabled=False):
         super().__init__(parent)
-        self.setWindowTitle("AI provider & privacy - v0.8.10")
+        self.setWindowTitle("AI provider & privacy - v0.8.11")
         self.setMinimumWidth(520)
         outer = QVBoxLayout(self)
         scroll = QScrollArea()
