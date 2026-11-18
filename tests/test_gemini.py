@@ -135,6 +135,12 @@ class GeminiAnalysisTests(unittest.TestCase):
         self.assertEqual(feedback.structured["student_progress"]["current_objective"], "array")
         self.assertEqual(feedback.structured["student_progress"]["completed"], ["header"])
 
+    def test_roast_requires_explicit_style_selection(self):
+        self.tutor().analyze(Snapshot("task", "ref", "", reason="prepare"))
+        self.assertNotIn("consenting to rude", FakeClient.calls[-1]["config"]["system_instruction"])
+        self.tutor().analyze(Snapshot("task", "ref", "", reason="prepare", tutor_style="Roast (experimental)"))
+        self.assertIn("consenting to rude", FakeClient.calls[-1]["config"]["system_instruction"])
+
     def test_initial_reference_is_structured_and_uses_official_contract(self):
         snap = Snapshot("Find greatest", "reference", "", reason="prepare")
         feedback = self.tutor().analyze(snap)

@@ -35,6 +35,7 @@ class Snapshot:
     conversation: tuple[dict, ...] = ()
     voice_question: str = ""
     language: str = "English"
+    tutor_style: str = "Friendly"
     revision: int = 0
     repeated_mistakes: tuple[tuple[str, int], ...] = ()
 

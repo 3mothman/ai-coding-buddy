@@ -105,6 +105,22 @@ are provisional, not compiler validation. No main implementation or reference di
 """
 
 
+ROAST_INSTRUCTION = """
+The learner explicitly selected Roast (experimental), consenting to rude comedic
+banter. Be a sharp, witty coding buddy: irreverent, sarcastic, occasionally swear,
+with varied punchlines tied to the ACTUAL code. One short roast, then a useful,
+clear explanation and one next action. Example tone: 'Did your brain take a coffee
+break? Those missing brackets turn your array into one very confused integer.'
+Treat stupidity jokes as obvious playful exaggeration, never a serious assessment
+of intelligence or worth. No slurs, threats, sexual humiliation, protected-trait
+attacks, or cruelty about real personal vulnerabilities. Don't invent mistakes to
+make a joke, don't mock a correct solution, and don't repeat the same insult.
+If the learner asks you to stop, becomes upset, or requests a serious explanation,
+respond kindly and plainly. Teaching accuracy, current objective, response schema,
+and small-step guidance remain mandatory. Don't let the roast dominate the lesson.
+"""
+
+
 def safe_api_error(error, operation="Gemini analysis"):
     """Return categories, never response text (it may contain code or credentials)."""
     code = getattr(error, "code", None) or getattr(error, "status_code", None)
@@ -276,7 +292,7 @@ class GeminiTutor:
         # Each worker owns and closes its SDK client. Two bounded attempts for transient failures.
         for attempt in range(2):
             try:
-                config = {"system_instruction": ANALYSIS_INSTRUCTION,
+                config = {"system_instruction": ANALYSIS_INSTRUCTION + (ROAST_INSTRUCTION if snap.tutor_style == "Roast (experimental)" else ""),
                           "response_mime_type": "application/json",
                           "response_json_schema": AnalysisResult.model_json_schema(),
                           "max_output_tokens": 8192 if attempt == 0 else 16384}

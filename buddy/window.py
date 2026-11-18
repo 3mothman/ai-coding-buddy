@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.13")
+        self.setWindowTitle("AI Coding Buddy - v0.8.14-roast")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -336,6 +336,7 @@ class MainWindow(QMainWindow):
         self.preferences.live_model = dialog.live_model.text().strip()
         self.preferences.live_voice = dialog.live_voice.currentText()
         self.preferences.language = dialog.language.currentText()
+        self.preferences.tutor_style = dialog.tutor_style.currentText()
         self.preferences.headphones = dialog.headphones.isChecked()
         self.preferences.inactivity = dialog.inactivity.value()
         self.preferences.cooldown = dialog.cooldown.value()
@@ -407,7 +408,7 @@ class MainWindow(QMainWindow):
             self.preparation_status.setText("Understanding the task and reference before practice...")
             self.statusBar().showMessage("Understanding the task and reference before practice...")
             self.last_reason = "prepare"
-            self.controller.request(self.provider, Snapshot(self.session.task, self.session.reference, "", reason="prepare", language=self.preferences.language))
+            self.controller.request(self.provider, Snapshot(self.session.task, self.session.reference, "", reason="prepare", language=self.preferences.language, tutor_style=self.preferences.tutor_style))
             return
         self.pages.setCurrentIndex(1)
         self.editor.setFocus()
@@ -539,7 +540,7 @@ class MainWindow(QMainWindow):
             self.last_checked_code, tuple(changes),
             "Teach the current concept: meaning, purpose, symbols, then one action. After a correct step teach the next one. Do not repeat completed headers.",
             voice_question=self.voice_tool_question if reason == "voice_question" else "",
-            language=self.preferences.language,
+            language=self.preferences.language, tutor_style=self.preferences.tutor_style,
         )
         self.controller.request(self.provider, snap)
 

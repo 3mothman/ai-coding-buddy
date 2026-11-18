@@ -19,6 +19,7 @@ class Preferences:
     live_model: str = DEFAULT_LIVE
     live_voice: str = "Aoede"
     language: str = "English"
+    tutor_style: str = "Friendly"
     inactivity: int = 25
     cooldown: int = 45
     headphones: bool = True
@@ -44,6 +45,8 @@ def load_preferences(path=None):
             values["provider"] = "compatible"
         if values["language"] not in {"English", "German"}:
             values["language"] = "English"
+        if values["tutor_style"] not in {"Friendly", "Roast (experimental)"}:
+            values["tutor_style"] = "Friendly"
         return Preferences(**values)
     except (OSError, ValueError):
         return Preferences()
@@ -58,7 +61,7 @@ def save_preferences(preferences, path=None):
 class SettingsDialog(QDialog):
     def __init__(self, preferences, key="", enabled=False, parent=None, live_enabled=False):
         super().__init__(parent)
-        self.setWindowTitle("AI provider & privacy - v0.8.13")
+        self.setWindowTitle("AI provider & privacy - v0.8.14-roast")
         self.setMinimumWidth(520)
         outer = QVBoxLayout(self)
         scroll = QScrollArea()
@@ -130,6 +133,13 @@ class SettingsDialog(QDialog):
         gemini_form.addRow("Live audio model", self.live_model)
         gemini_form.addRow("Live voice", self.live_voice)
         gemini_form.addRow("Teaching language", self.language)
+        self.tutor_style = QComboBox()
+        self.tutor_style.addItems(["Friendly", "Roast (experimental)"])
+        self.tutor_style.setCurrentText(preferences.tutor_style)
+        gemini_form.addRow("Tutor style", self.tutor_style)
+        style_note = QLabel("Roast is opt-in: sharp jokes and rude banter while teaching. Switch back to Friendly at any time.")
+        style_note.setWordWrap(True)
+        gemini_form.addRow(style_note)
         gemini_form.addRow(self.headphones)
         gemini_form.addRow(self.voice_consent)
         gemini_form.addRow(voice_note)

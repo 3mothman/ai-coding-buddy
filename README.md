@@ -1,12 +1,12 @@
 # AI Coding Buddy
 
 A Python/PySide6 desktop tutor for learning to write C code independently.
-Version **0.8.13** adds official Gemini analysis and optional Gemini Live voice.
+Version **0.8.14-roast** adds official Gemini analysis and optional Gemini Live voice.
 The existing editor, robot and two-view interface are preserved.
 
 ## Start on Windows
 
-**Portable:** extract AI-Coding-Buddy-v0.8.13.zip, open the AI-Coding-Buddy folder,
+**Portable:** extract AI-Coding-Buddy-v0.8.14-roast.zip, open the AI-Coding-Buddy folder,
 and run AI-Coding-Buddy.exe. Keep _internal and the notices beside it.
 
 **Source:** install Python 3.11 or later, extract this repository, run Setup.bat
@@ -118,7 +118,7 @@ additional editor languages, and automatic acoustic echo cancellation.
 
 [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-## Response diagnostics (0.8.13)
+## Response diagnostics (0.8.14-roast)
 
 The old unreadable-response error covered multiple failures. The app now checks
 finish reasons, uses SDK-parsed output when available, and distinguishes empty,
@@ -129,24 +129,26 @@ The exact cause of the reported 0.8 error could not be determined from its gener
 message alone. The new diagnostics allow that distinction without exposing keys
 or raw code. No live Gemini credentials were available for this fix.
 
-Version 0.8.13 distinguishes Google HTTP 400 invalid-key errors from invalid requests, restricted projects, network timeouts, transport failures and service failures. Error messages never include raw provider text or keys. An intentional invalid-key request confirmed that Google returns HTTP 400 with API_KEY_INVALID; this does not establish the cause of any user screenshot.
+Version 0.8.14-roast distinguishes Google HTTP 400 invalid-key errors from invalid requests, restricted projects, network timeouts, transport failures and service failures. Error messages never include raw provider text or keys. An intentional invalid-key request confirmed that Google returns HTTP 400 with API_KEY_INVALID; this does not establish the cause of any user screenshot.
 
-Version 0.8.13: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
+Version 0.8.14-roast: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
 
-Version 0.8.13 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
+Version 0.8.14-roast adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
 
-Version 0.8.13 automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.
+Version 0.8.14-roast automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.
 
-Version 0.8.13 adds contextual direct questions, remembers student questions, uses the accepted snapshot for code comparison, and reports safe validation rejection categories. Prompt instructions explicitly require checking current code and advancing to an unfinished objective. Offline contract tests do not establish real-model teaching accuracy or audible speech playback.
+Version 0.8.14-roast adds contextual direct questions, remembers student questions, uses the accepted snapshot for code comparison, and reports safe validation rejection categories. Prompt instructions explicitly require checking current code and advancing to an unfinished objective. Offline contract tests do not establish real-model teaching accuracy or audible speech playback.
 
-Version 0.8.13: inspected frames from the supplied 59.7-second recording. It shows an interrupted introduction, empty editor and the pre-0.8.6 quiz button/generic error. Approved speech now explicitly bypasses analyzer tool calls; invalidating a generation clears its generating flag so future commands can proceed. Partial speech transcripts no longer overwrite the full explanation. Repeat uses the approved hint. These changes are not a verification of audible playback or real-model tool compliance.
+Version 0.8.14-roast: inspected frames from the supplied 59.7-second recording. It shows an interrupted introduction, empty editor and the pre-0.8.6 quiz button/generic error. Approved speech now explicitly bypasses analyzer tool calls; invalidating a generation clears its generating flag so future commands can proceed. Partial speech transcripts no longer overwrite the full explanation. Repeat uses the approved hint. These changes are not a verification of audible playback or real-model tool compliance.
 
-Version 0.8.13 uses native Windows text-to-speech to read the full approved explanation independently of Gemini Live. Routine UI refresh and editor changes no longer stop playback. Review my solution and Automatic hints were removed from the learning controls; Live/microphone controls are hidden for this read-aloud-focused release. Voice and speed controls apply to native speech. Cloud voice quality is not preserved by this switch.
+Version 0.8.14-roast uses native Windows text-to-speech to read the full approved explanation independently of Gemini Live. Routine UI refresh and editor changes no longer stop playback. Review my solution and Automatic hints were removed from the learning controls; Live/microphone controls are hidden for this read-aloud-focused release. Voice and speed controls apply to native speech. Cloud voice quality is not preserved by this switch.
 
-0.8.13: Gemini explanations use the configured Gemini Live model and voice for a text-only, tool-free speech request. The complete PCM response is buffered into an in-memory WAV before playback. No microphone is opened. Generation errors remain visible; partial/interrupted clips are rejected. This adds generation latency. Offline tests verify chunk concatenation and rejection of interrupted output; authenticated speech quality and word completeness are not verified.
+0.8.14-roast: Gemini explanations use the configured Gemini Live model and voice for a text-only, tool-free speech request. The complete PCM response is buffered into an in-memory WAV before playback. No microphone is opened. Generation errors remain visible; partial/interrupted clips are rejected. This adds generation latency. Offline tests verify chunk concatenation and rejection of interrupted output; authenticated speech quality and word completeness are not verified.
 
-0.8.13 streams Gemini PCM to an output-only device after a 400 ms prebuffer; playback no longer waits for turn completion. A bounded queue preserves arriving chunks, and resampling follows the default output rate. No microphone is opened. Google first-audio latency still applies.
+0.8.14-roast streams Gemini PCM to an output-only device after a 400 ms prebuffer; playback no longer waits for turn completion. A bounded queue preserves arriving chunks, and resampling follows the default output rate. No microphone is opened. Google first-audio latency still applies.
 
-0.8.13 fixes Preview voice incorrectly using Windows TTS even in Gemini mode. Gemini mode hides Windows voice selection and displays its actual cloud voice name. Routine mode refresh no longer overwrites the audio status/error. This fixes a confirmed routing inconsistency, not a verified cloud playback failure.
+0.8.14-roast fixes Preview voice incorrectly using Windows TTS even in Gemini mode. Gemini mode hides Windows voice selection and displays its actual cloud voice name. Routine mode refresh no longer overwrites the audio status/error. This fixes a confirmed routing inconsistency, not a verified cloud playback failure.
 
-0.8.13 uses one persistent message field and Send button for student questions and answers. The existing analysis context carries the previous tutor question and conversation. Incoming feedback does not clear a message being drafted.
+0.8.14-roast uses one persistent message field and Send button for student questions and answers. The existing analysis context carries the previous tutor question and conversation. Incoming feedback does not clear a message being drafted.
+
+Experimental Roast style is opt-in under AI settings and applies to Gemini analysis. Friendly remains the default. The approved response is read by the existing natural speech path. No separate style-generation call is added. Version 0.8.13 remains available as a separate portable ZIP. Real-model comedic tone is not verified by offline tests.
