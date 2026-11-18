@@ -1,4 +1,4 @@
-# Verification — v0.8.11
+# Verification — v0.8.12
 
 Date: 17 November 2026. Platform: Windows, Python 3.11.
 
@@ -33,20 +33,22 @@ The root cause of the screenshot remains unconfirmed without its finish reason.
 
 HTTP error diagnostics were tested with real SDK error objects and a deliberate invalid diagnostic key (no successful inference or paid call). The user's actual connection failure remains unconfirmed until its diagnostic category is available.
 
-Version 0.8.11: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
+Version 0.8.12: Live connection queues the latest lesson hint for speech; text remains visible during audio generation; the speech status reflects the connection. Invalid structured analyses get one corrective retry with the same validation rules. The initial prompt explicitly includes beginner setup and a brief homework overview. Real microphone-to-speaker behavior has not been verified for this update.
 
-Version 0.8.11 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
+Version 0.8.12 adds a compact current-objective panel above a hold-to-talk button on the left. Live capture starts muted and only transmits while the learner holds the button, preventing open-microphone self-interruption between turns. Live playback on the user device still needs confirmation.
 
-Version 0.8.11 automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.
+Version 0.8.12 automatically connects Live voice after the lesson introduction is ready when Sound and session audio consent are enabled. On connection the existing introduction is queued for speech; microphone capture remains muted until Hold to talk.
 
-Version 0.8.11 adds contextual direct questions, remembers student questions, uses the accepted snapshot for code comparison, and reports safe validation rejection categories. Prompt instructions explicitly require checking current code and advancing to an unfinished objective. Offline contract tests do not establish real-model teaching accuracy or audible speech playback.
+Version 0.8.12 adds contextual direct questions, remembers student questions, uses the accepted snapshot for code comparison, and reports safe validation rejection categories. Prompt instructions explicitly require checking current code and advancing to an unfinished objective. Offline contract tests do not establish real-model teaching accuracy or audible speech playback.
 
-Version 0.8.11: inspected frames from the supplied 59.7-second recording. It shows an interrupted introduction, empty editor and the pre-0.8.6 quiz button/generic error. Approved speech now explicitly bypasses analyzer tool calls; invalidating a generation clears its generating flag so future commands can proceed. Partial speech transcripts no longer overwrite the full explanation. Repeat uses the approved hint. These changes are not a verification of audible playback or real-model tool compliance.
+Version 0.8.12: inspected frames from the supplied 59.7-second recording. It shows an interrupted introduction, empty editor and the pre-0.8.6 quiz button/generic error. Approved speech now explicitly bypasses analyzer tool calls; invalidating a generation clears its generating flag so future commands can proceed. Partial speech transcripts no longer overwrite the full explanation. Repeat uses the approved hint. These changes are not a verification of audible playback or real-model tool compliance.
 
-0.8.11 regression: unsolicited snippets are discarded while retaining valid diagnosis, message and line highlight. Complete-program content in displayed messages and requested examples remains rejected. Tested missing array brackets from the screenshot using a mocked model response.
+0.8.12 regression: unsolicited snippets are discarded while retaining valid diagnosis, message and line highlight. Complete-program content in displayed messages and requested examples remains rejected. Tested missing array brackets from the screenshot using a mocked model response.
 
-Version 0.8.11 uses native Windows text-to-speech to read the full approved explanation independently of Gemini Live. Routine UI refresh and editor changes no longer stop playback. Review my solution and Automatic hints were removed from the learning controls; Live/microphone controls are hidden for this read-aloud-focused release. Voice and speed controls apply to native speech. Cloud voice quality is not preserved by this switch.
+Version 0.8.12 uses native Windows text-to-speech to read the full approved explanation independently of Gemini Live. Routine UI refresh and editor changes no longer stop playback. Review my solution and Automatic hints were removed from the learning controls; Live/microphone controls are hidden for this read-aloud-focused release. Voice and speed controls apply to native speech. Cloud voice quality is not preserved by this switch.
 
-0.8.11: Gemini explanations use the configured Gemini Live model and voice for a text-only, tool-free speech request. The complete PCM response is buffered into an in-memory WAV before playback. No microphone is opened. Generation errors remain visible; partial/interrupted clips are rejected. This adds generation latency. Offline tests verify chunk concatenation and rejection of interrupted output; authenticated speech quality and word completeness are not verified.
+0.8.12: Gemini explanations use the configured Gemini Live model and voice for a text-only, tool-free speech request. The complete PCM response is buffered into an in-memory WAV before playback. No microphone is opened. Generation errors remain visible; partial/interrupted clips are rejected. This adds generation latency. Offline tests verify chunk concatenation and rejection of interrupted output; authenticated speech quality and word completeness are not verified.
 
-0.8.11 streams Gemini PCM to an output-only device after a 400 ms prebuffer; playback no longer waits for turn completion. A bounded queue preserves arriving chunks, and resampling follows the default output rate. No microphone is opened. Google first-audio latency still applies.
+0.8.12 streams Gemini PCM to an output-only device after a 400 ms prebuffer; playback no longer waits for turn completion. A bounded queue preserves arriving chunks, and resampling follows the default output rate. No microphone is opened. Google first-audio latency still applies.
+
+0.8.12 fixes Preview voice incorrectly using Windows TTS even in Gemini mode. Gemini mode hides Windows voice selection and displays its actual cloud voice name. Routine mode refresh no longer overwrites the audio status/error. This fixes a confirmed routing inconsistency, not a verified cloud playback failure.

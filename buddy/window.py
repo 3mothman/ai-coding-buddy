@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.11")
+        self.setWindowTitle("AI Coding Buddy - v0.8.12")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -282,7 +282,8 @@ class MainWindow(QMainWindow):
         for voice in self.speech.voices():
             self.voice_choice.addItem(voice.name(), voice)
         self.voice_choice.currentIndexChanged.connect(self.choose_voice)
-        right.addWidget(self.label("Voice"))
+        self.voice_title = self.label("Voice")
+        right.addWidget(self.voice_title)
         right.addWidget(self.voice_choice)
         self.speed = QSlider(Qt.Orientation.Horizontal)
         self.speed.setRange(-50, 30)
@@ -292,7 +293,7 @@ class MainWindow(QMainWindow):
         self.speech.set_rate(-0.1)
         right.addWidget(self.label("Speech speed: slower to faster"))
         right.addWidget(self.speed)
-        self.preview_button = self.button("Preview voice", lambda: self.speech.say("Let's build this program together, one step at a time."), right)
+        self.preview_button = self.button("Preview voice", lambda: self.read_aloud("Let's build this program together, one step at a time."), right)
         self.review_label = self.label("", "subtitle")
         right.addWidget(self.review_label)
         right.addStretch()
@@ -308,12 +309,14 @@ class MainWindow(QMainWindow):
         if hasattr(self, "live_button"):
             gemini = isinstance(self.provider, GeminiTutor)
             self.live_button.setEnabled(gemini and self.voice_consent)
-            self.voice_choice.setEnabled(self.speech.available)
-            self.speed.setEnabled(self.speech.available)
-            self.preview_button.setEnabled(self.speech.available)
+            self.voice_choice.setVisible(not gemini)
+            self.voice_title.setText(f"Gemini voice: {self.preferences.live_voice}" if gemini else "Windows voice")
+            self.speed.setEnabled(self.speech.available and not gemini)
+            self.preview_button.setEnabled(gemini or self.speech.available)
             self.repeat_button.setEnabled(self.speech.available or self.voice.is_connected)
             self.sound_box.setEnabled(True if gemini else self.speech.available)
-            self.speech_note.setText("Natural Gemini voice streams audio as it arrives. Microphone input is off.")
+            if not self.speech_note.text():
+                self.speech_note.setText("Natural Gemini voice streams audio as it arrives. Microphone input is off." if gemini else "Windows speech is active in demo mode.")
 
     def persist_preferences(self):
         try:
