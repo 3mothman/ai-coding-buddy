@@ -95,7 +95,7 @@ class MainWindow(QMainWindow):
         self.progress_timer.setSingleShot(True)
         self.progress_timer.setInterval(2000)
         self.progress_timer.timeout.connect(self.observe_progress)
-        self.setWindowTitle("AI Coding Buddy - v0.8.12")
+        self.setWindowTitle("AI Coding Buddy - v0.8.13")
         self.resize(1160, 820)
         self.setMinimumSize(850, 650)
         self.setStyleSheet(STYLE)
@@ -237,21 +237,15 @@ class MainWindow(QMainWindow):
         self.check_button.setObjectName("primary")
         self.check_button.setToolTip("Check your current work and get one small next step.")
         self.question_input = QLineEdit()
-        self.question_input.setPlaceholderText("Ask about your code...")
+        self.question_input.setPlaceholderText("Ask a question or write your answer...")
         self.question_input.setMaxLength(2000)
         self.question_input.returnPressed.connect(self.ask_direct_question)
         right.addWidget(self.question_input)
-        self.button("Send question", self.ask_direct_question, right)
-        self.answer = QLineEdit()
-        self.answer.setPlaceholderText("Your answer to the buddy's question")
-        self.answer.setMaxLength(2000)
-        self.answer.setAccessibleName("Answer to understanding question")
-        self.answer.textEdited.connect(self.answer_edited)
-        self.answer.returnPressed.connect(self.submit_answer)
-        self.answer.hide()
-        right.addWidget(self.answer)
-        self.answer_button = self.button("Submit answer", self.submit_answer, right)
-        self.answer_button.hide()
+        self.send_button = self.button("Send", self.ask_direct_question, right)
+        self.question_input.setAccessibleName("Message to the tutor: question or answer")
+        # Shared input for both questions and answers.
+        self.answer = self.question_input
+        self.answer_button = self.send_button
         self.auto_box = QCheckBox("Automatic hints")
         self.auto_box.setChecked(False)
         self.preferences.automatic = False
@@ -358,8 +352,6 @@ class MainWindow(QMainWindow):
         self.history = []
         self.recent_code = []
         self.current_question = ""
-        self.answer.hide()
-        self.answer_button.hide()
         self.review_label.clear()
         self.snippet.hide()
         self.persist_preferences()
@@ -405,8 +397,6 @@ class MainWindow(QMainWindow):
         self.last_auto_code = None
         self.current_question = ""
         self.answer.clear()
-        self.answer.hide()
-        self.answer_button.hide()
         self.review_label.clear()
         self.snippet.hide()
         self.example_button.setEnabled(False)
@@ -442,8 +432,6 @@ class MainWindow(QMainWindow):
         self.snippet.hide()
         self.review_label.clear()
         self.current_question = ""
-        self.answer.hide()
-        self.answer_button.hide()
         if self.pages.currentIndex() == 1:
             self.character.set_state("neutral")
             self.progress_timer.start()
@@ -513,6 +501,7 @@ class MainWindow(QMainWindow):
         if question:
             self.voice_tool_question = question
             self.ask("voice_question")
+            self.question_input.clear()
 
     def ask(self, reason):
         if self.pages.currentIndex() != 1:
@@ -601,9 +590,7 @@ class MainWindow(QMainWindow):
         self.snippet.setPlainText(feedback.snippet)
         self.snippet.setVisible(bool(feedback.snippet))
         self.current_question = feedback.question
-        self.answer.clear()
-        self.answer.setVisible(bool(feedback.question))
-        self.answer_button.setVisible(bool(feedback.question))
+        self.question_input.setPlaceholderText("Ask a question or write your answer...")
         if self.last_reason == "review":
             status = "AI review: looks complete (not compiled or tested)." if feedback.complete else "Review: keep exploring and checking edge cases."
             if not self.ai_enabled:
